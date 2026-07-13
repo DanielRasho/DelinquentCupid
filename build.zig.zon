@@ -1,0 +1,25 @@
+.{
+    .name = .zig_test,
+    .version = "0.0.0",
+    .fingerprint = 0x10159def0f32491b, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .raylib_zig = .{
+            .url = "git+https://github.com/raylib-zig/raylib-zig?ref=devel#97be2c7ae646a2f09856604b138c427c0af1b952",
+            .hash = "raylib_zig-6.0.0-KE8REDJ4BQBu7lKwYNt6R4j5ywPeS37zqW6zrtjCcRwH",
+        },
+        .zgui = .{
+            .url = "git+https://github.com/zig-gamedev/zgui#bfbebed372723d1f585f86fc0a550232b3427f4d",
+            .hash = "zgui-0.6.0-dev--L6sZJhIbgAjWdK5h6xuVUrsOcD-RdqEOEPf03Zgi4mF",
+        },
+        .rlimgui = .{
+            .url = "https://github.com/raylib-extras/rlImGui/archive/dc7f97679a024eee8f5f009e77cc311748200415.tar.gz",
+            .hash = "N-V-__8AAC-taQCKZ-3IjRuWJ-5Dc47QKHDPEmqlwXhvjBGq",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
