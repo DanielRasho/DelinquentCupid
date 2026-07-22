@@ -8,6 +8,7 @@ const c = @cImport({
 
 const SCREEN_W: i32 = 1024;
 const SCREEN_H: i32 = 768;
+const PADDLE_SPEED: i32 = 8;
 
 const GameStatus = enum { READY, PLAYING, WIN, LOOSE };
 
@@ -17,7 +18,7 @@ const Paddle = struct {
         return Paddle{
             .rect = .{
                 .x = @as(f32, @floatFromInt(SCREEN_W)) / 2.0 - width / 2.0,
-                .y = height,
+                .y = SCREEN_H - 40,
                 .width = width,
                 .height = height,
             },
@@ -26,16 +27,40 @@ const Paddle = struct {
     fn center(self: Paddle) f32 {
         return self.rect.x + self.rect.width / 2.0;
     }
+    fn render(self: *Paddle) void {
+        rl.drawRectangleRec(self.rect, .white);
+    }
 };
 
 const Ball = struct {
     pos: rl.Vector2 = undefined,
     vel: rl.Vector2 = undefined,
+    linear_vel: f32 = 350.0,
     radius: f32 = 8.0,
 
     fn resetBallOnPaddle(self: *Ball, paddle: Paddle) void {
         self.pos = .{ .x = paddle.center(), .y = paddle.rect.y - self.radius - 1.0 };
         self.vel = .{ .x = 0, .y = 0 };
+        self.linear_vel = 0;
+    }
+
+    fn launch(self: *Ball) void {
+        const dir = rl.Vector2{ .x = 0.35, .y = -0.9 };
+        const len = @sqrt(dir.x * dir.x + dir.y * dir.y);
+        self.vel = .{ .x = dir.x / len * self.linear_vel, .y = dir.y / len * self.linear_vel };
+    }
+
+    fn updateVel(self: *Ball) void {
+        const cur_len = @sqrt(self.vel.x * self.vel.x + self.vel.y * self.vel.y);
+        if (cur_len > 0.0001) {
+            const scale = self.linear_vel / cur_len;
+            self.vel.x *= scale;
+            self.vel.y *= scale;
+        }
+    }
+
+    fn render(self: *Ball) void {
+        rl.drawCircleV(self.pos, self.radius, .white);
     }
 };
 
@@ -97,6 +122,11 @@ const GameState = struct {
     fn deinit(self: *GameState, allocator: std.mem.Allocator) !void {
         allocator.free(self.bricks);
     }
+    fn restartBricks(self: *GameState) void {
+        for (self.bricks) |*brick| {
+            brick.is_broken = false;
+        }
+    }
 };
 
 fn centerScreen() rl.Vector2 {
@@ -121,6 +151,8 @@ pub fn main() !void {
     // IMGUI
     c.rlImGuiSetup(true);
     defer c.rlImGuiShutdown();
+    zgui.initNoContext(allocator);
+    defer zgui.deinitNoContext();
 
     // GAME STATE
     const paddle: Paddle = Paddle.new(120.0, 20.0);
@@ -146,21 +178,73 @@ pub fn main() !void {
 
 fn initialize() void {}
 
-fn update(state: *GameState, _: f32) void {
-    switch (state.status) {
-        GameStatus.READY, GameStatus.PLAYING => {},
-        GameStatus.WIN => {},
-        GameStatus.LOOSE => {},
+fn update(s: *GameState, dt: f32) void {
+    if (s.status == .READY or s.status == .PLAYING) {
+        if (rl.isKeyDown(.left) or rl.isKeyDown(.a)) {
+            s.paddle.rect.x -= PADDLE_SPEED * dt;
+        }
+        if (rl.isKeyDown(.right) or rl.isKeyDown(.d)) {
+            s.paddle.rect.x -= PADDLE_SPEED * dt;
+        }
+        if (s.paddle.rect.x < 0) s.paddle.rect.x = 0;
+        if (s.paddle.rect.x + s.paddle.rect.width > @as(f32, @floatFromInt(SCREEN_W))) {
+            s.paddle.rect.x = @as(f32, @floatFromInt(SCREEN_W)) - s.paddle.rect.width;
+        }
+    }
+
+    switch (s.status) {
+        .READY => {
+            s.ball.resetBallOnPaddle(s.paddle);
+            if (rl.isKeyPressed(.space)) {
+                s.ball.launch();
+                s.status = .PLAYING;
+            }
+        },
+        .PLAYING => {
+            // Modify ball speed
+
+            // Ball Colisions
+
+            // Paddle collisions
+
+            // Brick collisions
+
+            // WIN CHECK
+        },
+        .WIN => {},
+        .LOOSE => {},
     }
 }
 
-fn render(state: *GameState) void {
+fn render(s: *GameState) void {
     rl.beginDrawing();
     defer rl.endDrawing();
     rl.clearBackground(.dark_gray);
 
     // Draw Bricks
-    for (state.bricks) |brick| {
+    for (s.bricks) |brick| {
         brick.render();
     }
+
+    s.ball.render();
+    s.paddle.render();
+
+    // HUD
+    c.rlImGuiBegin();
+    if (zgui.begin("Game HUD", .{})) {
+        zgui.text("Lives: {d}", .{s.lives});
+        zgui.text("Bricks left: {d}", .{s.bricks.len - s.broken_bricks});
+        zgui.text("Total bricks: {d}", .{s.bricks.len});
+        zgui.separator();
+        _ = zgui.sliderFloat("Ball speed", .{ .v = &s.ball.linear_vel, .min = 150.0, .max = 800.0 });
+        if (zgui.button("Restart", .{})) {
+            s.paddle.rect.x = @as(f32, @floatFromInt(SCREEN_W)) / 2.0 - s.paddle.rect.width / 2.0;
+            s.restartBricks();
+            s.ball.resetBallOnPaddle(s.paddle);
+            s.lives = 3;
+            s.status = .READY;
+        }
+    }
+    zgui.end();
+    c.rlImGuiEnd();
 }
