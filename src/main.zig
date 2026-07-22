@@ -8,7 +8,7 @@ const c = @cImport({
 
 const SCREEN_W: i32 = 1024;
 const SCREEN_H: i32 = 768;
-const PADDLE_SPEED: i32 = 8;
+const PADDLE_SPEED: i32 = 300;
 
 const GameStatus = enum { READY, PLAYING, WIN, LOOSE };
 
@@ -41,7 +41,6 @@ const Ball = struct {
     fn resetBallOnPaddle(self: *Ball, paddle: Paddle) void {
         self.pos = .{ .x = paddle.center(), .y = paddle.rect.y - self.radius - 1.0 };
         self.vel = .{ .x = 0, .y = 0 };
-        self.linear_vel = 0;
     }
 
     fn launch(self: *Ball) void {
@@ -58,6 +57,15 @@ const Ball = struct {
             self.vel.y *= scale;
         }
     }
+
+    fn updatePosition(self: *Ball, dt: f32) void {
+        self.pos.x += self.vel.x * dt;
+        self.pos.y += self.vel.y * dt;
+    }
+
+    fn BounceOnField() void {}
+
+    fn bounce() void {}
 
     fn render(self: *Ball) void {
         rl.drawCircleV(self.pos, self.radius, .white);
@@ -184,7 +192,7 @@ fn update(s: *GameState, dt: f32) void {
             s.paddle.rect.x -= PADDLE_SPEED * dt;
         }
         if (rl.isKeyDown(.right) or rl.isKeyDown(.d)) {
-            s.paddle.rect.x -= PADDLE_SPEED * dt;
+            s.paddle.rect.x += PADDLE_SPEED * dt;
         }
         if (s.paddle.rect.x < 0) s.paddle.rect.x = 0;
         if (s.paddle.rect.x + s.paddle.rect.width > @as(f32, @floatFromInt(SCREEN_W))) {
@@ -202,14 +210,56 @@ fn update(s: *GameState, dt: f32) void {
         },
         .PLAYING => {
             // Modify ball speed
+            s.ball.updateVel();
+            s.ball.updatePosition(dt);
 
             // Ball Colisions
+            // -- BOTTOM
+            if (s.ball.pos.y - s.ball.radius > SCREEN_H) {
+                s.lives -= 1;
+                if (s.lives <= 0) {
+                    s.status = .LOOSE;
+                } else {
+                    s.ball.resetBallOnPaddle(s.paddle);
+                    s.status = .READY;
+                }
+            }
+            // -- OTHER WALLS
+            if (s.ball.pos.x - s.ball.radius <= 0) {
+                s.ball.pos.x = s.ball.radius;
+                s.ball.vel.x = -s.ball.vel.x;
+            } else if (s.ball.pos.x + s.ball.radius >= SCREEN_W) {
+                s.ball.pos.x = SCREEN_W - s.ball.radius;
+                s.ball.vel.x = -s.ball.vel.x;
+            }
+            if (s.ball.pos.y - s.ball.radius <= 0) {
+                s.ball.pos.y = s.ball.radius;
+                s.ball.vel.y = -s.ball.vel.y;
+            }
 
             // Paddle collisions
+            if (rl.checkCollisionCircleRec(s.ball.pos, s.ball.radius, s.paddle.rect)) {
+                if (s.ball.vel.y > 0) {
+                    s.ball.pos.y = s.paddle.rect.y - s.ball.radius - 0.5;
+
+                    const hit_post = (s.ball.pos.x - s.paddle.center()) / (s.paddle.rect.width / 2.0);
+                    const speed = @sqrt(s.ball.vel.x * s.ball.vel.x + s.ball.vel.y * s.ball.vel.y);
+
+                    // Update velocity
+                    s.ball.vel.x = hit_post * speed;
+                    s.ball.vel.y = -@abs(s.ball.vel.y);
+
+                    // s.ball.vel.y = -@abs(s.ball.vel.y);
+                    // s.ball.vel.y = -@abs(s.ball.vel.y);
+                }
+            }
 
             // Brick collisions
 
             // WIN CHECK
+            if (s.broken_bricks == s.bricks.len) {
+                s.status = .WIN;
+            }
         },
         .WIN => {},
         .LOOSE => {},
@@ -221,12 +271,12 @@ fn render(s: *GameState) void {
     defer rl.endDrawing();
     rl.clearBackground(.dark_gray);
 
-    // Draw Bricks
-    for (s.bricks) |brick| {
+    // Render Bricks
+    for (s.bricks) |brick|
         brick.render();
-    }
-
+    // Render Ball
     s.ball.render();
+    // Render Paddle
     s.paddle.render();
 
     // HUD
