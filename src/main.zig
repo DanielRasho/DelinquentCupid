@@ -240,7 +240,7 @@ fn update(s: *GameState, dt: f32) void {
             // Paddle collisions
             if (rl.checkCollisionCircleRec(s.ball.pos, s.ball.radius, s.paddle.rect)) {
                 if (s.ball.vel.y > 0) {
-                    s.ball.pos.y = s.paddle.rect.y - s.ball.radius - 0.5;
+                    s.ball.pos.y = s.paddle.rect.y - s.ball.radius;
 
                     const hit_post = (s.ball.pos.x - s.paddle.center()) / (s.paddle.rect.width / 2.0);
                     const speed = @sqrt(s.ball.vel.x * s.ball.vel.x + s.ball.vel.y * s.ball.vel.y);
@@ -248,13 +248,31 @@ fn update(s: *GameState, dt: f32) void {
                     // Update velocity
                     s.ball.vel.x = hit_post * speed;
                     s.ball.vel.y = -@abs(s.ball.vel.y);
-
-                    // s.ball.vel.y = -@abs(s.ball.vel.y);
-                    // s.ball.vel.y = -@abs(s.ball.vel.y);
                 }
             }
 
             // Brick collisions
+            for (s.bricks) |*brick| {
+                if (brick.is_broken) continue;
+                if (rl.checkCollisionCircleRec(s.ball.pos, s.ball.radius, brick.rect)) {
+                    brick.is_broken = true;
+                    s.broken_bricks += 1;
+
+                    const closest_x = std.math.clamp(s.ball.pos.x, brick.rect.x, brick.rect.x + brick.rect.width);
+                    const closest_y = std.math.clamp(s.ball.pos.y, brick.rect.y, brick.rect.y + brick.rect.height);
+
+                    const dx = @abs(s.ball.pos.x - closest_x);
+                    const dy = @abs(s.ball.pos.y - closest_y);
+
+                    if (dx > dy) {
+                        s.ball.vel.x = -s.ball.vel.x;
+                    } else {
+                        s.ball.vel.y = -s.ball.vel.y;
+                    }
+
+                    break;
+                }
+            }
 
             // WIN CHECK
             if (s.broken_bricks == s.bricks.len) {
