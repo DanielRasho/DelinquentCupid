@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "zig_test",
+        .name = "zing_zong",
         .use_llvm = true,
         .use_lld = true,
         .root_module = b.createModule(.{

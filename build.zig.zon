@@ -1,7 +1,7 @@
 .{
-    .name = .zig_test,
+    .name = .zig_zong,
     .version = "0.0.0",
-    .fingerprint = 0x10159def0f32491b, // Changing this has security and trust implications.
+    .fingerprint = 0x868f42c81ab91012, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .raylib_zig = .{
