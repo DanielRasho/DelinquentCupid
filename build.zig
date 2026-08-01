@@ -1,5 +1,14 @@
 const std = @import("std");
 
+// Mental Model
+// =================
+//
+// Exe (Executable) -HAS-> Modules -HAS-> Group of files
+//      |
+//  ARE USED IN
+//      |
+//     steps
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -15,6 +24,18 @@ pub fn build(b: *std.Build) void {
             .imports = &.{},
         }),
     });
+
+    // ======================
+    // ECS
+    // ======================
+
+    // creates a private module only usable within the project.
+    const ecs_mod = b.addModule("ecs", .{
+        .root_source_file = b.path("src/ecs/ecs.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("ecs", ecs_mod);
 
     // ========================
     // == RAYLIB
@@ -37,13 +58,15 @@ pub fn build(b: *std.Build) void {
     // ========================
     // == ZGUI (ImGUI)
     // ========================
-    const zgui = b.dependency("zgui", .{
+
+    // b.dependency used to creawte module from a package defined in build.zig.zon
+    const zgui_dep = b.dependency("zgui", .{
         .shared = false,
         .with_implot = true,
     });
-    exe.root_module.addImport("zgui", zgui.module("root"));
-    exe.root_module.linkLibrary(zgui.artifact("imgui"));
-    exe.root_module.addIncludePath(zgui.path("libs/imgui"));
+    exe.root_module.addImport("zgui", zgui_dep.module("root"));
+    exe.root_module.linkLibrary(zgui_dep.artifact("imgui"));
+    exe.root_module.addIncludePath(zgui_dep.path("libs/imgui"));
 
     // =============
     const rlimgui = b.dependency("rlimgui", .{
@@ -59,7 +82,6 @@ pub fn build(b: *std.Build) void {
             "-DNO_FONT_AWESOME",
         },
     });
-    // exe.addIncludePath(rlimgui.path("."));
     exe.root_module.addIncludePath(rlimgui.path("."));
 
     // ========================
@@ -86,12 +108,20 @@ pub fn build(b: *std.Build) void {
     // == TESTS
     // ========================
 
+    const ecs_mod_tests = b.addTest(.{
+        .root_module = ecs_mod,
+    });
+    const run_ecs_mod_tests = b.addRunArtifact(ecs_mod_tests);
+
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
+        .use_llvm = true,
+        .use_lld = true,
     });
 
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_exe_tests.step);
+    test_step.dependOn(&run_ecs_mod_tests.step);
 }

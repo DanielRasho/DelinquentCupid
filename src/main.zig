@@ -316,3 +316,7 @@ fn render(s: *GameState) void {
     zgui.end();
     c.rlImGuiEnd();
 }
+
+test {
+    try std.testing.expect(true);
+}
