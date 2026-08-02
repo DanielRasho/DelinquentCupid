@@ -1,0 +1,72 @@
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+const testing = std.testing;
+
+const entity = @import("entity.zig");
+const system = @import("systems.zig");
+
+pub const Scene = struct {
+    allocator: Allocator,
+    systems: std.array_hash_map.String(system.System) = .empty,
+    entities: entity.EntityDB,
+
+    pub fn init(allocator: Allocator) !Scene {
+        return .{
+            .allocator = allocator,
+            .entities = try entity.EntityDB.init(allocator),
+        };
+    }
+    pub fn deinit(self: *Scene) void {
+        self.systems.deinit(self.allocator);
+        self.entities.deinit();
+    }
+
+    pub fn register(self: *Scene, name: []const u8, s: system.System) !void {
+        try self.systems.put(self.allocator, name, s);
+    }
+
+    pub fn unregister(self: *Scene, name: []const u8) void {
+        self.systems.orderedRemove(name);
+    }
+
+    pub fn setup(self: *Scene) void {
+        for (self.systems.values()) |*s| {
+            s.setup(s, self);
+        }
+    }
+    pub fn update(self: *Scene, dt: f32) void {
+        for (self.systems.values()) |*s| {
+            if (!s.enabled) continue;
+            s.update(s, self, dt);
+        }
+    }
+    pub fn destroy(self: *Scene) void {
+        for (self.systems.values()) |*s| {
+            s.destroy(s, self);
+        }
+    }
+};
+
+test "Scene - Basic" {
+    const allocator = std.testing.allocator;
+    // Create Scene
+    var testing_scene = try Scene.init(allocator);
+    defer testing_scene.deinit();
+
+    // Create System
+    const testing_system = system.System{
+        .update = struct {
+            fn call(_: *system.System, _: *Scene, _: f32) void {
+                std.log.info("HELLO WORLD\n\n", .{});
+            }
+        }.call,
+    };
+
+    // Add system
+    try testing_scene.register("Testing System", testing_system);
+
+    // Run all systems
+    testing_scene.update(1);
+    // Destroy Scene
+    testing_scene.destroy();
+}

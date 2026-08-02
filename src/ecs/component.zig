@@ -70,9 +70,9 @@ pub fn ComponentStorage(comptime Component: type) type {
         /// should address a existent space, or one higher that the max current lenght
         /// to ensure dense data.
         pub fn set(self: *Self, allocator: Allocator, row_idx: u32, component: Component) !void {
-            if (row_idx > self.getDataLen()) {
+            if (row_idx > self.count()) {
                 return ComponentStorageError.IndexNotTighlyPackaged;
-            } else if (row_idx == self.getDataLen()) {
+            } else if (row_idx == self.count()) {
                 // Since row_idx == len, only one element is needed.
                 try self.data.append(allocator, undefined);
             }
@@ -85,7 +85,7 @@ pub fn ComponentStorage(comptime Component: type) type {
         }
         /// Removes a component at a given idx from the storage
         pub fn remove(self: *Self, row_idx: u32) void {
-            if (row_idx < self.getDataLen()) {
+            if (row_idx < self.count()) {
                 _ = self.data.swapRemove(row_idx);
             }
         }
@@ -93,7 +93,7 @@ pub fn ComponentStorage(comptime Component: type) type {
         pub fn copyFrom(self: *Self, allocator: Allocator, src_row: u32, dst_row: u32, src: *Self) !void {
             try self.set(allocator, dst_row, src.get(src_row));
         }
-        inline fn getDataLen(self: *Self) usize {
+        inline fn count(self: *Self) usize {
             return self.data.items.len;
         }
 
