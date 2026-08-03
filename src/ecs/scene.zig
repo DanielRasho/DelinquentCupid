@@ -5,6 +5,7 @@ const testing = std.testing;
 const entity = @import("entity.zig");
 const system = @import("systems.zig");
 
+/// Representation of a set of systems and entities that work together.
 pub const Scene = struct {
     allocator: Allocator,
     systems: std.array_hash_map.String(system.System) = .empty,

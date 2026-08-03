@@ -47,7 +47,6 @@ pub const ArchetypeTable = struct {
         return self.entities.items.len;
     }
 
-    //
     pub fn insert(self: *ArchetypeTable, id: EntityID) !u32 {
         const new_row_index = self.entities.items.len;
         try self.entities.append(self.allocator, id);
@@ -148,6 +147,7 @@ pub const EntityDB = struct {
         self.archetypes.deinit(self.allocator);
     }
 
+    /// Creates a new entity without any component;
     pub fn new(self: *EntityDB) !EntityID {
         const new_id = self.counter;
         self.counter += 1;
@@ -166,6 +166,10 @@ pub const EntityDB = struct {
         return new_id;
     }
 
+    /// Adds/updates a component to an entity.
+    ///
+    /// The actual implementation moves the component across tables if the entity didn't have
+    /// the component previously to mantain the data thighly packaged.
     pub fn setComponent(self: *EntityDB, entity: EntityID, component: anytype) !void {
         const Component = @TypeOf(component);
         const component_name = @typeName(Component);
@@ -261,7 +265,7 @@ pub const EntityDB = struct {
         return result.index;
     }
 
-    // Finds or creates the archetype reached from src_index by dropping component_name.
+    /// Finds or creates the archetype reached from src_index by dropping component_name.
     fn getOrCreateArchetypeWithout(
         self: *EntityDB,
         src_index: u16,
@@ -279,8 +283,8 @@ pub const EntityDB = struct {
 
     const ColumnEntry = struct { key: []const u8, value: IComponentStore };
 
-    // Snapshots the component columns of an archetype, optionally skipping one by name.
-    // Must be taken before touching self.archetypes, since inserting into it can reallocate.
+    /// Snapshots the component columns of an archetype, optionally skipping one by name.
+    /// Must be taken before touching self.archetypes, since inserting into it can reallocate.
     fn snapshotColumns(self: *EntityDB, src_index: u16, exclude_name: ?[]const u8) !std.ArrayList(ColumnEntry) {
         var entries: std.ArrayList(ColumnEntry) = .empty;
         errdefer entries.deinit(self.allocator);
@@ -296,7 +300,7 @@ pub const EntityDB = struct {
         return entries;
     }
 
-    // Finds the archetype with the given hash, or creates one populated with the given columns.
+    /// Finds the archetype with the given hash, or creates one populated with the given columns.
     fn getOrCreateArchetypeForHash(
         self: *EntityDB,
         new_hash: u64,
@@ -328,7 +332,7 @@ pub const EntityDB = struct {
         return .{ .index = @intCast(archetype_entry.index), .is_new = true };
     }
 
-    // removes and entity and all its components.
+    /// removes and entity and all its components.
     pub fn remove(self: *EntityDB, entity: EntityID) void {
         const pointer = self.entities.get(entity) orelse return;
         const archetype = &self.archetypes.values()[pointer.archetype_index];
@@ -350,7 +354,7 @@ pub const EntityDB = struct {
         _ = self.entities.remove(entity);
     }
 
-    // removes a component from an entity by moving it to another ArchetypeTable, if it doesn't exist it creates it
+    /// removes a component from an entity by moving it to another ArchetypeTable, if it doesn't exist it creates it
     pub fn removeComponent(self: *EntityDB, entity: EntityID, comptime Component: type) !void {
         const component_name = @typeName(Component);
 
@@ -401,6 +405,7 @@ pub const EntityDB = struct {
         }
     }
 
+    /// Returns a pointer the a component for the client to modify
     pub fn getComponent(self: *EntityDB, id: EntityID, comptime Component: type) ?*Component {
         const ptr = self.entities.get(id).?;
         const archetype = self.getEntityArchetype(id) orelse return null;
@@ -411,6 +416,7 @@ pub const EntityDB = struct {
         return store.getPtr(ptr.row_index);
     }
 
+    /// Returns a iterator of entityId with given components
     pub fn query(self: *EntityDB, comptime components: anytype) Iterator {
         const component_names = comptime blk: {
             var names: [components.len][]const u8 = undefined;
