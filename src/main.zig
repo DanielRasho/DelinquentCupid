@@ -66,6 +66,7 @@ pub fn main() !void {
         scene.render();
         renderHud(&scene);
     }
+    scene.destroy();
 }
 
 fn renderHud(scene: *ecs.scene.Scene) void {
