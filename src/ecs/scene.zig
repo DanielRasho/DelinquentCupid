@@ -40,6 +40,12 @@ pub const Scene = struct {
             s.update(s, self, dt);
         }
     }
+    pub fn render(self: *Scene) void {
+        for (self.systems.values()) |*s| {
+            if (!s.enabled) continue;
+            s.render(s, self);
+        }
+    }
     pub fn destroy(self: *Scene) void {
         for (self.systems.values()) |*s| {
             s.destroy(s, self);
