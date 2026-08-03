@@ -5,6 +5,7 @@ const c = @cImport({
     @cDefine("NO_FONT_AWESOME", "1");
     @cInclude("rlImGui.h");
 });
+const ecs = @import("ecs");
 
 const SCREEN_W: i32 = 1024;
 const SCREEN_H: i32 = 768;
