@@ -1,6 +1,6 @@
 <h1 align="center">Zing Zong</h1>
 
-A Ping Pong implementation in Zing with Raylib + ImGui
+A Breakout game implementation in Zig with Raylib + ImGui
 
 Tested with 
 - Zig `0.16.0`
