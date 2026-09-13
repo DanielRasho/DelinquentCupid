@@ -1,83 +1,22 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
-const IComponentStore = @import("component.zig").IComponentStore;
-const ComponentStore = @import("component.zig").ComponentStore;
 const assert = std.debug.assert;
 
-pub const VOID_ARCHETYPE_HASH = std.math.maxInt(u64);
+const IComponentStore = @import("component.zig").IComponentStore;
+const ComponentStore = @import("component.zig").ComponentStore;
 
-pub const EntityID = u64;
+const archetype_table = @import("archetype_table.zig");
+pub const ArchetypeTable = archetype_table.ArchetypeTable;
+pub const VOID_ARCHETYPE_HASH = archetype_table.VOID_ARCHETYPE_HASH;
+pub const EntityID = archetype_table.EntityID;
+pub const ArchetypeTableHash = archetype_table.ArchetypeTableHash;
 
 pub const EntityDBError = error{EntityNotFound};
 
-pub const ArchetypeTable = struct {
-    hash: u64,
-    allocator: Allocator,
-
-    entities: std.ArrayList(EntityID) = .empty,
-    components: std.array_hash_map.String(IComponentStore) = .empty,
-
-    pub fn deinit(
-        self: *ArchetypeTable,
-    ) void {
-        for (self.components.values()) |component| {
-            component.deinit(self.allocator);
-        }
-        self.entities.deinit(self.allocator);
-        self.components.deinit(self.allocator);
-    }
-    pub fn calculateHash(names: []const []const u8) u64 {
-        var hash: u64 = 0;
-        for (names) |name| {
-            hash ^= std.hash_map.hashString(name);
-        }
-        return hash;
-    }
-
-    pub fn hasComponents(self: *const ArchetypeTable, components: []const []const u8) bool {
-        for (components) |c| {
-            if (!self.components.contains(c))
-                return false;
-        }
-        return true;
-    }
-
-    pub fn count(self: *const ArchetypeTable) usize {
-        return self.entities.items.len;
-    }
-
-    pub fn insert(self: *ArchetypeTable, id: EntityID) !u32 {
-        const new_row_index = self.entities.items.len;
-        try self.entities.append(self.allocator, id);
-        return @intCast(new_row_index);
-    }
-    pub fn undoInsertion(self: *ArchetypeTable) void {
-        _ = self.entities.pop();
-    }
-
-    pub fn set(self: *ArchetypeTable, row_index: u32, component_name: []const u8, value: anytype) !void {
-        const iStorage = self.components.get(component_name).?;
-        var storage = IComponentStore.cast(iStorage.ptr, @TypeOf(value));
-        try storage.set(self.allocator, row_index, value);
-    }
-
-    pub fn getEntityIdByIdx(self: *const ArchetypeTable, idx: usize) u64 {
-        return self.entities.items[idx];
-    }
-
-    pub fn removeEntity(self: *ArchetypeTable, row_idx: usize) void {
-        for (self.components.values()) |*c| {
-            c.remove(row_idx);
-        }
-        _ = self.entities.swapRemove(row_idx);
-    }
-
-    pub fn getIComponentStorage(self: *ArchetypeTable, componentName: []const u8) ?IComponentStore {
-        return self.components.get(componentName) orelse return null;
-    }
-};
-
+/// The Entity Database, responsable of managing the creation of entities and
+/// its componentes. Relying in maintaing a dictionary of ArchetypTables.
+/// The Tables and rows are created automatically on demand.
 pub const EntityDB = struct {
     allocator: Allocator,
 
@@ -85,7 +24,7 @@ pub const EntityDB = struct {
 
     entities: std.AutoHashMapUnmanaged(EntityID, Pointer) = .empty,
 
-    archetypes: std.array_hash_map.Auto(u64, ArchetypeTable) = .empty,
+    archetypes: std.array_hash_map.Auto(ArchetypeTableHash, ArchetypeTable) = .empty,
 
     // ===============
     // PUBLIC TYPES
@@ -110,6 +49,7 @@ pub const EntityDB = struct {
                 const archetype = db.getArchetypeTableByIndex(self.archetype_idx);
 
                 // Skip void archetype and empty archetypes
+                // Asking for entities with no properties is useless.
                 const is_void = archetype.hash == VOID_ARCHETYPE_HASH;
                 const has_match = !is_void and
                     archetype.hasComponents(self.components) and
@@ -133,7 +73,12 @@ pub const EntityDB = struct {
     pub fn init(allocator: Allocator) !EntityDB {
         var entities = EntityDB{ .allocator = allocator };
 
-        try entities.archetypes.put(allocator, VOID_ARCHETYPE_HASH, ArchetypeTable{ .allocator = allocator, .hash = VOID_ARCHETYPE_HASH, .components = .empty, .entities = .empty });
+        try entities.archetypes.put(allocator, VOID_ARCHETYPE_HASH, ArchetypeTable{
+            .allocator = allocator,
+            .hash = VOID_ARCHETYPE_HASH,
+            .components = .empty,
+            .entities = .empty,
+        });
 
         return entities;
     }
@@ -147,7 +92,8 @@ pub const EntityDB = struct {
         self.archetypes.deinit(self.allocator);
     }
 
-    /// Creates a new entity without any component;
+    /// Creates a new entity without any component so it is assigned to the VOID ARCHETYPE
+    /// (a table with no components);
     pub fn new(self: *EntityDB) !EntityID {
         const new_id = self.counter;
         self.counter += 1;
@@ -170,9 +116,11 @@ pub const EntityDB = struct {
     ///
     /// The actual implementation moves the component across tables if the entity didn't have
     /// the component previously to mantain the data thighly packaged.
+    ///
+    /// If a table with such combination of components didnt' exist is it created.
     pub fn setComponent(self: *EntityDB, entity: EntityID, component: anytype) !void {
-        const Component = @TypeOf(component);
-        const component_name = @typeName(Component);
+        const ComponentType = @TypeOf(component);
+        const component_name = @typeName(ComponentType);
 
         // Get current pointer before any reallocation
         const old_pointer = self.entities.get(entity) orelse return EntityDBError.EntityNotFound;
@@ -180,18 +128,18 @@ pub const EntityDB = struct {
 
         // Get or create the destination archetype
         // We pass the index, not a pointer, to avoid dangling refs after reallocation
-        const new_archetype_index = try self.getOrCreateArchetype(old_archetype_index, Component);
+        const new_archetype_index = try self.getOrCreateArchetype(old_archetype_index, ComponentType);
 
         // If it's the same archetype, component already exists — just overwrite
         if (old_archetype_index == new_archetype_index) {
             const archetype = &self.archetypes.values()[new_archetype_index];
-            try archetype.set(old_pointer.row_index, component_name, component);
+            try archetype.setComponent(old_pointer.row_index, component_name, component);
             return;
         }
 
         const new_archetype = &self.archetypes.values()[new_archetype_index];
 
-        // Insert entity into new archetype row
+        // Insert entity id into new archetype row
         const new_row = try new_archetype.insert(entity);
         errdefer new_archetype.undoInsertion();
 
@@ -204,7 +152,7 @@ pub const EntityDB = struct {
         }
 
         // Set the new component value
-        try new_archetype.set(new_row, component_name, component);
+        try new_archetype.setComponent(new_row, component_name, component);
 
         // Update entity pointer
         try self.entities.put(self.allocator, entity, Pointer{
@@ -243,10 +191,10 @@ pub const EntityDB = struct {
         const src_hash = self.archetypes.values()[src_index].hash;
         const new_hash = src_hash ^ std.hash_map.hashString(component_name);
 
-        var src_entries = try self.snapshotColumns(src_index, null);
-        defer src_entries.deinit(self.allocator);
+        var src_columns = try self.snapshotColumns(src_index, null);
+        defer src_columns.deinit(self.allocator);
 
-        const result = try self.getOrCreateArchetypeForHash(new_hash, src_entries.items);
+        const result = try self.getOrCreateArchetypeForHash(new_hash, src_columns.items);
         if (result.is_new) {
             const new_archetype = &self.archetypes.values()[result.index];
             const total_rows = &new_archetype.entities.items.len;
@@ -272,19 +220,22 @@ pub const EntityDB = struct {
         component_name: []const u8,
     ) !u16 {
         const src_hash = self.archetypes.values()[src_index].hash;
+        // Applying XOR again, produces a hash without the component_name;
         const new_hash = src_hash ^ std.hash_map.hashString(component_name);
 
-        var src_entries = try self.snapshotColumns(src_index, component_name);
-        defer src_entries.deinit(self.allocator);
+        var src_columns = try self.snapshotColumns(src_index, component_name);
+        defer src_columns.deinit(self.allocator);
 
-        const result = try self.getOrCreateArchetypeForHash(new_hash, src_entries.items);
+        const result = try self.getOrCreateArchetypeForHash(new_hash, src_columns.items);
         return result.index;
     }
 
     const ColumnEntry = struct { key: []const u8, value: IComponentStore };
 
+    /// User is owner is the owner of the value.
     /// Snapshots the component columns of an archetype, optionally skipping one by name.
-    /// Must be taken before touching self.archetypes, since inserting into it can reallocate.
+    /// Must be taken before touching self.archetypes, since inserting into it can reallocate values, hence
+    /// invalidating pointers.
     fn snapshotColumns(self: *EntityDB, src_index: u16, exclude_name: ?[]const u8) !std.ArrayList(ColumnEntry) {
         var entries: std.ArrayList(ColumnEntry) = .empty;
         errdefer entries.deinit(self.allocator);
@@ -416,6 +367,17 @@ pub const EntityDB = struct {
         return store.getPtr(ptr.row_index);
     }
 
+    /// Returns the @typeName of every component this entity currently has.
+    /// Component identity is erased to a vtable once stored (see
+    /// IComponentStore), so there's no `type` to hand back here -- these
+    /// are the raw storage keys, e.g. "game.components.Position". Useful
+    /// for tools (an inspector, a debugger) that want to know what's on an
+    /// entity without knowing its component types up front.
+    pub fn getComponentNames(self: *EntityDB, id: EntityID) ?[]const []const u8 {
+        const archetype = self.getEntityArchetype(id) orelse return null;
+        return archetype.components.keys();
+    }
+
     /// Returns a iterator of entityId with given components
     pub fn query(self: *EntityDB, comptime components: anytype) Iterator {
         const component_names = comptime blk: {
@@ -452,15 +414,6 @@ pub const EntityDB = struct {
         return &self.archetypes.values()[idx];
     }
 };
-
-test "ArchetypeTable - Basic" {
-    const allocator = std.testing.allocator;
-    var table = ArchetypeTable{
-        .allocator = allocator,
-        .hash = VOID_ARCHETYPE_HASH,
-    };
-    table.deinit();
-}
 
 test "EntityDB - Public API" {
     const allocator = std.testing.allocator;

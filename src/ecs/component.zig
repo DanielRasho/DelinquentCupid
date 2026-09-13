@@ -39,8 +39,8 @@ pub const IComponentStore = struct {
         self.deinitFn(self.ptr, allocator);
     }
 
-    /// Removes a component at a given idx from the storage
-    pub fn remove(self: IComponentStore, row: usize) void {
+    /// Removes a component at a given idx from the storage by swapping it with the last idx
+    pub fn swapRemove(self: IComponentStore, row: usize) void {
         self.removeFn(self.ptr, row);
     }
 
@@ -100,8 +100,9 @@ pub fn ComponentStore(comptime Component: type) type {
             return &self.data.items[row_idx];
         }
 
-        /// Removes a component at a given idx from the storage
-        pub fn remove(self: *Self, row_idx: usize) void {
+        /// Removes a component at a given idx from the storage, by swaping it with the last item
+        /// on the list and then removing the last node on the list.
+        pub fn swapRemove(self: *Self, row_idx: usize) void {
             if (row_idx < self.count()) {
                 _ = self.data.swapRemove(row_idx);
             }
@@ -146,7 +147,7 @@ pub fn ComponentStore(comptime Component: type) type {
 
         fn removeErased(ptr: *anyopaque, row: usize) void {
             const storage = IComponentStore.cast(ptr, Component);
-            storage.remove(row);
+            storage.swapRemove(row);
         }
 
         fn copyErased(dst_ptr: *anyopaque, allocator: Allocator, src_row: u32, dst_row: u32, src_ptr: *anyopaque) !void {
@@ -188,7 +189,7 @@ test "ComponentStore - Basic" {
     try storage.copyFrom(allocator, 0, 0, &other_storage);
 
     // Removing comopnent
-    storage.remove(0);
+    storage.swapRemove(0);
 }
 
 test "IComponentStore - Basic" {
@@ -211,5 +212,5 @@ test "IComponentStore - Basic" {
     const erased = storage.interface();
     // Interacting with the concrete object through the interface
     defer erased.deinit(allocator);
-    erased.remove(0);
+    erased.swapRemove(0);
 }
