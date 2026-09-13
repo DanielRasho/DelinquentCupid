@@ -32,3 +32,14 @@ Also the Raylib library is actually *dinamically linked* and everything compiled
 zig build           # Compile
 zig build run       # Compile & run
 ```
+
+## Architecture
+
+The architecture is heavely inspired in the drafts provided [by this post by the creators of the match engine ](https://devlog.hexops.org/2022/lets-build-ecs-part-1/). The whole idea revolves around 2 main pillars: 
+
+1. See the ECS as **Relational DB** with some sprinkles✨ on top.
+2. The data should be as **thighly** pack as possible.
+
+Those to directed the main design decision and data structures giving returning something like this:
+
+![](./docs/architecture1.png)
