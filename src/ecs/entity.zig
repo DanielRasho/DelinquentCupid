@@ -391,7 +391,7 @@ pub const EntityDB = struct {
     //  DEBUGGING
     // ===================
 
-    /// Useful for tools (an inspector, a debugger) that want to know what's on an
+    /// Useful for Debug Tools that want to know what's on an
     /// entity without knowing its component types up front; see
     /// `componentsOf` to also *read and write* those components' fields
     /// without their types.
@@ -401,11 +401,12 @@ pub const EntityDB = struct {
     }
 
     /// To support debugging tools is necesary to store the type of each component
-    /// after compilation.
+    /// after compilation. A light version of the type is stored as reflect.TypeDescriptor,
+    /// A ComponentView allows to
     ///
     /// Only valid until the next structural change to the database -- any
     /// `new`, `setComponent` or `remove`..., on *any* entity,
-    /// can move rows between archetypes and reallocate columns.
+    /// can move rows between archetypes and reallocate columns. Don't
     pub const ComponentView = struct {
         /// The full @typeName, i.e. the archetype column key.
         name: []const u8,

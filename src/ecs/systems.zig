@@ -4,6 +4,8 @@ const testing = std.testing;
 const scene = @import("scene.zig");
 
 pub const System = struct {
+    /// A flag if the system update() method should be run on the current frame.
+    /// The other callbacks still runs no matter what.
     enabled: bool = true,
 
     // ===============

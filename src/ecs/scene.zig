@@ -43,7 +43,6 @@ pub const Scene = struct {
     }
     pub fn render(self: *Scene) void {
         for (self.systems.values()) |*s| {
-            if (!s.enabled) continue;
             s.render(s, self);
         }
     }
@@ -76,4 +75,33 @@ test "Scene - Basic" {
     testing_scene.update(1);
     // Destroy Scene
     testing_scene.destroy();
+}
+
+test "Scene - disabled system skips update but still renders" {
+    const allocator = std.testing.allocator;
+    var testing_scene = try Scene.init(allocator);
+    defer testing_scene.deinit();
+
+    const Counter = struct {
+        var updates: usize = 0;
+        var renders: usize = 0;
+        fn update(_: *system.System, _: *Scene, _: f32) void {
+            updates += 1;
+        }
+        fn render(_: *system.System, _: *Scene) void {
+            renders += 1;
+        }
+    };
+    try testing_scene.register("Counter", .{ .update = Counter.update, .render = Counter.render });
+
+    testing_scene.update(1);
+    testing_scene.render();
+    try testing.expectEqual(@as(usize, 1), Counter.updates);
+    try testing.expectEqual(@as(usize, 1), Counter.renders);
+
+    testing_scene.systems.getPtr("Counter").?.enabled = false;
+    testing_scene.update(1);
+    testing_scene.render();
+    try testing.expectEqual(@as(usize, 1), Counter.updates);
+    try testing.expectEqual(@as(usize, 2), Counter.renders);
 }
