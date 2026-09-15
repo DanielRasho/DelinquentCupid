@@ -6,6 +6,7 @@ const assert = std.debug.assert;
 const IComponentStore = @import("component.zig").IComponentStore;
 const ComponentStore = @import("component.zig").ComponentStore;
 
+const reflect = @import("reflect.zig");
 const archetype_table = @import("archetype_table.zig");
 pub const ArchetypeTable = archetype_table.ArchetypeTable;
 pub const VOID_ARCHETYPE_HASH = archetype_table.VOID_ARCHETYPE_HASH;
@@ -358,24 +359,13 @@ pub const EntityDB = struct {
 
     /// Returns a pointer the a component for the client to modify
     pub fn getComponent(self: *EntityDB, id: EntityID, comptime Component: type) ?*Component {
-        const ptr = self.entities.get(id).?;
+        const ptr = self.entities.get(id) orelse return null;
         const archetype = self.getEntityArchetype(id) orelse return null;
 
         const iStore = archetype.getIComponentStorage(@typeName(Component)) orelse return null;
         const store = IComponentStore.cast(iStore.ptr, Component);
 
         return store.getPtr(ptr.row_index);
-    }
-
-    /// Returns the @typeName of every component this entity currently has.
-    /// Component identity is erased to a vtable once stored (see
-    /// IComponentStore), so there's no `type` to hand back here -- these
-    /// are the raw storage keys, e.g. "game.components.Position". Useful
-    /// for tools (an inspector, a debugger) that want to know what's on an
-    /// entity without knowing its component types up front.
-    pub fn getComponentNames(self: *EntityDB, id: EntityID) ?[]const []const u8 {
-        const archetype = self.getEntityArchetype(id) orelse return null;
-        return archetype.components.keys();
     }
 
     /// Returns a iterator of entityId with given components
@@ -395,6 +385,77 @@ pub const EntityDB = struct {
         return Iterator{
             .entities = self,
             .components = &component_names,
+        };
+    }
+    // ===================
+    //  DEBUGGING
+    // ===================
+
+    /// Useful for tools (an inspector, a debugger) that want to know what's on an
+    /// entity without knowing its component types up front; see
+    /// `componentsOf` to also *read and write* those components' fields
+    /// without their types.
+    pub fn getComponentNames(self: *EntityDB, id: EntityID) ?[]const []const u8 {
+        const archetype = self.getEntityArchetype(id) orelse return null;
+        return archetype.components.keys();
+    }
+
+    /// To support debugging tools is necesary to store the type of each component
+    /// after compilation.
+    ///
+    /// Only valid until the next structural change to the database -- any
+    /// `new`, `setComponent` or `remove`..., on *any* entity,
+    /// can move rows between archetypes and reallocate columns.
+    pub const ComponentView = struct {
+        /// The full @typeName, i.e. the archetype column key.
+        name: []const u8,
+        desc: *const reflect.TypeDescriptor,
+        /// Exactly `desc.size` bytes; empty for a tag component.
+        bytes: []u8,
+    };
+
+    /// Walks every component on one entity. Order is the archetype's column
+    /// order, which is stable for a given archetype but isn't sorted.
+    pub const ComponentIterator = struct {
+        archetype: *ArchetypeTable,
+        row: u32,
+        index: usize = 0,
+
+        pub fn next(self: *ComponentIterator) ?ComponentView {
+            const keys = self.archetype.components.keys();
+            const stores = self.archetype.components.values();
+
+            while (self.index < keys.len) {
+                const i = self.index;
+                self.index += 1;
+
+                const bytes = stores[i].rowBytes(self.row) orelse continue; // If row not found, just skip to the next one
+                return .{ .name = keys[i], .desc = stores[i].desc, .bytes = bytes };
+            }
+            return null;
+        }
+    };
+
+    /// Iterator over all of an entity's components as raw bytes + layout.
+    /// Null if the entity doesn't exist.
+    pub fn componentsOf(self: *EntityDB, id: EntityID) ?ComponentIterator {
+        const pointer = self.entities.get(id) orelse return null;
+        return .{
+            .archetype = &self.archetypes.values()[pointer.archetype_index],
+            .row = pointer.row_index,
+        };
+    }
+
+    /// One component by its storage key (a full @typeName). Null if the
+    /// entity doesn't exist or doesn't have that component.
+    pub fn getComponentView(self: *EntityDB, id: EntityID, name: []const u8) ?ComponentView {
+        const pointer = self.entities.get(id) orelse return null;
+        const archetype = &self.archetypes.values()[pointer.archetype_index];
+        const store = archetype.getIComponentStorage(name) orelse return null;
+        return .{
+            .name = name,
+            .desc = store.desc,
+            .bytes = store.rowBytes(pointer.row_index) orelse return null,
         };
     }
 
@@ -564,4 +625,138 @@ test "EntityDB - Public API" {
 
         try std.testing.expectEqual(@as(usize, 1), count);
     }
+}
+
+/// Finds a view by component type in an iterator, for tests that don't care
+/// about archetype column order.
+fn findView(db: *EntityDB, id: EntityID, comptime Component: type) ?EntityDB.ComponentView {
+    var it = db.componentsOf(id) orelse return null;
+    while (it.next()) |view| {
+        if (std.mem.eql(u8, view.name, @typeName(Component))) return view;
+    }
+    return null;
+}
+
+test "EntityDB - component views" {
+    const allocator = std.testing.allocator;
+
+    const Position = struct { x: f32, y: f32 };
+    const Tag = struct {};
+
+    var db = try EntityDB.init(allocator);
+    defer db.deinit();
+
+    const e = try db.new();
+    try db.setComponent(e, Position{ .x = 3, .y = 4 });
+    try db.setComponent(e, Tag{});
+
+    // Every component shows up, keyed by its full @typeName, carrying the
+    // same descriptor reflect.zig hands out for that type.
+    var seen: usize = 0;
+    var it = db.componentsOf(e).?;
+    while (it.next()) |_| seen += 1;
+    try std.testing.expectEqual(@as(usize, 2), seen);
+
+    const pos_view = findView(&db, e, Position).?;
+    try std.testing.expectEqual(reflect.describe(Position), pos_view.desc);
+    try std.testing.expectEqualStrings("Position", pos_view.desc.short_name);
+    try std.testing.expectEqual(@as(usize, @sizeOf(Position)), pos_view.bytes.len);
+
+    // A tag has a row, it just has no bytes and no fields.
+    const tag_view = findView(&db, e, Tag).?;
+    try std.testing.expectEqual(@as(usize, 0), tag_view.bytes.len);
+    try std.testing.expectEqual(@as(usize, 0), tag_view.desc.fields.len);
+
+    // The bytes alias the real column: writing through a descriptor thunk is
+    // visible via the typed accessor.
+    const x = pos_view.desc.fields[0];
+    try std.testing.expectEqualStrings("x", x.name);
+    try std.testing.expectEqual(@as(f64, 3), x.kind.float.load(x.bytes(pos_view.bytes)));
+
+    x.kind.float.store(x.bytes(pos_view.bytes), 99.5);
+    try std.testing.expectEqual(@as(f32, 99.5), db.getComponent(e, Position).?.x);
+    try std.testing.expectEqual(@as(f32, 4), db.getComponent(e, Position).?.y);
+}
+
+test "EntityDB - views survive archetype migration" {
+    const allocator = std.testing.allocator;
+
+    const Position = struct { x: f32, y: f32 };
+    const Velocity = struct { x: f32, y: f32 };
+
+    var db = try EntityDB.init(allocator);
+    defer db.deinit();
+
+    const a = try db.new();
+    const b = try db.new();
+    try db.setComponent(a, Position{ .x = 1, .y = 1 });
+    try db.setComponent(b, Position{ .x = 2, .y = 2 });
+
+    // Moves `a` to a new archetype, which also swap-removes it out of the
+    // old one and shifts `b`'s row.
+    try db.setComponent(a, Velocity{ .x = 10, .y = 10 });
+
+    // Both entities still resolve to their own rows...
+    const a_pos = findView(&db, a, Position).?;
+    const b_pos = findView(&db, b, Position).?;
+    const ax = a_pos.desc.fields[0];
+    try std.testing.expectEqual(@as(f64, 1), ax.kind.float.load(ax.bytes(a_pos.bytes)));
+    try std.testing.expectEqual(@as(f64, 2), ax.kind.float.load(ax.bytes(b_pos.bytes)));
+
+    // ... and the descriptor is still the same static one, proving the new
+    // archetype's column rebuilt its metadata from the same component type.
+    try std.testing.expectEqual(reflect.describe(Position), a_pos.desc);
+    try std.testing.expectEqual(reflect.describe(Position), b_pos.desc);
+    try std.testing.expectEqual(reflect.describe(Velocity), findView(&db, a, Velocity).?.desc);
+}
+
+test "EntityDB - same short name, different modules" {
+    const allocator = std.testing.allocator;
+
+    // Two distinct components whose short names collide. Matching on the
+    // short name would confuse these; views never match by name at all.
+    const A = struct {
+        pub const P = struct { x: f32 };
+    };
+    const B = struct {
+        pub const P = struct { flag: bool };
+    };
+
+    var db = try EntityDB.init(allocator);
+    defer db.deinit();
+
+    const e = try db.new();
+    try db.setComponent(e, A.P{ .x = 7 });
+    try db.setComponent(e, B.P{ .flag = true });
+
+    const a_view = findView(&db, e, A.P).?;
+    const b_view = findView(&db, e, B.P).?;
+
+    try std.testing.expect(!std.mem.eql(u8, a_view.name, b_view.name));
+    try std.testing.expectEqualStrings("P", a_view.desc.short_name);
+    try std.testing.expectEqualStrings("P", b_view.desc.short_name);
+
+    // Each renders its own fields, not the other's.
+    try std.testing.expectEqualStrings("x", a_view.desc.fields[0].name);
+    try std.testing.expectEqualStrings("flag", b_view.desc.fields[0].name);
+}
+
+test "EntityDB - getComponentView" {
+    const allocator = std.testing.allocator;
+
+    const Position = struct { x: f32, y: f32 };
+
+    var db = try EntityDB.init(allocator);
+    defer db.deinit();
+
+    const e = try db.new();
+    try db.setComponent(e, Position{ .x = 5, .y = 6 });
+
+    try std.testing.expect(db.getComponentView(e, @typeName(Position)) != null);
+    // A component the entity doesn't have, and an entity that doesn't exist,
+    // are both misses rather than panics.
+    try std.testing.expectEqual(@as(?EntityDB.ComponentView, null), db.getComponentView(e, "nope"));
+    try std.testing.expectEqual(@as(?EntityDB.ComponentView, null), db.getComponentView(9999, @typeName(Position)));
+    try std.testing.expectEqual(@as(?EntityDB.ComponentIterator, null), db.componentsOf(9999));
+    try std.testing.expectEqual(@as(?*Position, null), db.getComponent(9999, Position));
 }

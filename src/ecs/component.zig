@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const reflect = @import("reflect.zig");
 
 pub const ComponentStoreError = error{
     // Returned when client wants to set the value of and index
@@ -25,6 +26,24 @@ pub const IComponentStore = struct {
         allocator: Allocator,
         total_entities: *usize,
     ) error{OutOfMemory}!IComponentStore,
+    rowPtrFn: *const fn (ptr: *anyopaque, row: u32) ?[]u8,
+
+    /// Comptime field layout for this column's component type, captured when
+    /// the column was created (see reflect.zig). Static, never freed, and
+    /// pointer-identical for every column holding the same component type --
+    /// `cloneEmpty` rebuilds the interface from the same `Component`, so the
+    /// metadata survives an entity migrating between archetypes.
+    ///
+    /// This is what lets a tool edit a component it has no `type` for: the
+    /// column is erased, but its layout isn't.
+    desc: *const reflect.TypeDescriptor,
+
+    /// The raw bytes of one row, for reading and writing fields through
+    /// `desc`. Null means `row` is out of range -- a zero-sized component
+    /// (a tag) yields a valid empty slice, not null.
+    pub fn rowBytes(self: IComponentStore, row: u32) ?[]u8 {
+        return self.rowPtrFn(self.ptr, row);
+    }
 
     pub fn cloneEmpty(
         self: IComponentStore,
@@ -136,6 +155,10 @@ pub fn ComponentStore(comptime Component: type) type {
                 .removeFn = removeErased,
                 .copyFn = copyErased,
                 .cloneEmptyFn = cloneEmpty,
+                .rowPtrFn = rowBytesErased,
+                // The one place the component's type is still known, so the
+                // one place its layout can be captured.
+                .desc = reflect.describe(Component),
             };
         }
 
@@ -148,6 +171,12 @@ pub fn ComponentStore(comptime Component: type) type {
         fn removeErased(ptr: *anyopaque, row: usize) void {
             const storage = IComponentStore.cast(ptr, Component);
             storage.swapRemove(row);
+        }
+
+        fn rowBytesErased(ptr: *anyopaque, row: u32) ?[]u8 {
+            const storage = IComponentStore.cast(ptr, Component);
+            if (row >= storage.data.items.len) return null;
+            return std.mem.asBytes(&storage.data.items[row])[0..];
         }
 
         fn copyErased(dst_ptr: *anyopaque, allocator: Allocator, src_row: u32, dst_row: u32, src_ptr: *anyopaque) !void {
@@ -212,5 +241,39 @@ test "IComponentStore - Basic" {
     const erased = storage.interface();
     // Interacting with the concrete object through the interface
     defer erased.deinit(allocator);
+
+    // The erased column still carries its component's layout, and the
+    // descriptor is the same one reflect.zig hands out for that type.
+    try std.testing.expectEqual(reflect.describe(Cat), erased.desc);
+    try std.testing.expectEqualStrings("Cat", erased.desc.short_name);
+    try std.testing.expectEqual(@as(usize, 1), erased.desc.fields.len);
+
+    // Row 0 exists, anything past the end doesn't.
+    try std.testing.expectEqual(@as(usize, @sizeOf(Cat)), (erased.rowBytes(0).?).len);
+    try std.testing.expectEqual(@as(?[]u8, null), erased.rowBytes(1));
+
     erased.swapRemove(0);
+    try std.testing.expectEqual(@as(?[]u8, null), erased.rowBytes(0));
+}
+
+test "IComponentStore - component with size 0" {
+    // Implementation should be able to differentiate non-existent values from zero-size values.
+    const allocator = std.testing.allocator;
+
+    const Tag = struct {};
+    var total_rows: usize = 1;
+
+    var storage = try allocator.create(ComponentStore(Tag));
+    storage.* = ComponentStore(Tag){ .total_rows = &total_rows };
+    try storage.set(allocator, 0, Tag{});
+
+    const erased = storage.interface();
+    defer erased.deinit(allocator);
+
+    // Type descriptor should still work with zero-size descriptor (struct with no bytes in it),
+    const bytes = erased.rowBytes(0);
+    try std.testing.expect(bytes != null); // Should not return null, since its a real value
+    try std.testing.expectEqual(@as(usize, 0), bytes.?.len);
+    try std.testing.expectEqual(@as(usize, 0), erased.desc.fields.len);
+    try std.testing.expect(erased.rowBytes(1) == null); // Should return null since its a non-existen value.
 }

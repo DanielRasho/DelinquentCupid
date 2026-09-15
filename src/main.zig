@@ -6,7 +6,7 @@ const c = @cImport({
     @cInclude("rlImGui.h");
 });
 const ecs = @import("ecs");
-const Game = @import("Game.zig");
+const Game = ecs.Game;
 const DebugTool = @import("debug/DebugTool.zig").DebugTool;
 const constants = @import("game/systems/constants.zig");
 
@@ -23,12 +23,6 @@ const render_system = @import("game/systems/render.zig").render_system;
 const WINDOW_W: i32 = @intFromFloat(constants.SCREEN_W);
 const WINDOW_H: i32 = @intFromFloat(constants.SCREEN_H);
 
-/// The only scene today. Builds and registers the same five systems
-/// main.zig used to wire up by hand; Registration order is important and
-/// is commented where it used to live: `Game` before `Brick` (brick setup
-/// writes the spawned brick count into the singleton's `Score`), and
-/// `Paddle` before `Ball` (ball setup reads the paddle's position to snap
-/// the ball onto it).
 fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     var scn = try ecs.scene.Scene.init(allocator);
     try scn.register("Game", game_system);
@@ -61,35 +55,31 @@ pub fn main() !void {
     defer zgui.deinitNoContext();
 
     // Game / Scenes
-    Game.init(allocator);
-    defer Game.deinit();
+    const game = &Game.instance;
+    game.init(allocator);
+    defer game.deinit();
 
-    try Game.registerScene("game", gameplayScene);
-    try Game.start("game");
+    try game.registerScene("game", gameplayScene);
+    try game.start("game");
 
     var debug_tool = DebugTool{};
 
     while (!rl.windowShouldClose()) {
         const dt = rl.getFrameTime();
-        // The debug tool's "Pause"/"Next Frame" panel gates whether the
-        // game actually advances this frame; rendering below always runs,
-        // so the paused game stays visible on screen.
         if (debug_tool.shouldStep()) {
-            Game.update(dt);
+            game.update(dt);
         }
 
         rl.beginDrawing();
         defer rl.endDrawing();
         rl.clearBackground(.dark_gray);
 
-        Game.render();
+        game.render();
 
-        // One rlImGuiBegin/End bracket per frame covers every ImGui window
-        // -- the HUD and every debug panel -- since rlImGuiBegin starts a
-        // new ImGui frame and rlImGuiEnd renders it; nesting a second pair
-        // inside the same frame would start ImGui over mid-frame.
+        // Debug tools SHOULD be run after the frame completion,
+        // and within a ImGui render cycle.
         c.rlImGuiBegin();
-        debug_tool.render(dt, Game);
+        debug_tool.render(dt, game);
         c.rlImGuiEnd();
     }
 }

@@ -2,68 +2,21 @@ const std = @import("std");
 const zgui = @import("zgui");
 const rl = @import("raylib");
 const ecs = @import("ecs");
-const known = @import("../known_components.zig");
 
 const Scene = ecs.scene.Scene;
 const EntityID = ecs.entity.EntityID;
+const reflect = ecs.reflect;
 
-/// One entry in the Inspector's *editable*-component registry: a friendly
-/// display name paired with the concrete type, so the Inspector can go
-/// straight to `entities.getComponent(id, entry.T)` and `@field()` into a
-/// live pointer. This is narrower than "every component that exists" --
-/// see the note on `known_components` below for why a type is required
-/// here at all, and what happens to components that aren't in it.
-const ComponentEntry = struct { name: [:0]const u8, T: type };
-
-/// The component types the Inspector can render *editable* widgets for --
-/// built from `known_components.zig`'s hand-written, explicit list of bare
-/// types (which can come from anywhere; nothing here cares which file
-/// declared them), with a display name derived from each type's own
-/// `@typeName`. Sorted alphabetically by name -- the order the
-/// "Selected Entity" panel lists a component's fields in.
+/// The Inspector reads and writes components it has no `type` for. Component
+/// identity in storage is an erased `@typeName` string and a `type` can't be
+/// recovered from a string at runtime -- but it doesn't have to be: every
+/// column carries a `reflect.TypeDescriptor` captured at the moment it was
+/// created, while its component type was still known (see ecs/reflect.zig).
+/// `EntityDB.componentsOf()` hands over that descriptor plus the live bytes of
+/// the entity's row, which is everything needed to draw real widgets.
 ///
-/// This is *not* what makes a component visible to the Inspector at all --
-/// `EntityDB.getComponentNames()` lists an entity's components straight
-/// from live ECS storage, no matter where the component type is declared,
-/// since component identity there is just an erased `@typeName` string
-/// (there's no way to recover a `type` from that at runtime -- Zig's
-/// `type` only exists at compile time, and mutable state can't survive
-/// between separate comptime evaluations to be accumulated as
-/// `setComponent()` gets called across the program either -- Zig rejects
-/// that outright, which is exactly why this has to be an explicit list).
-/// A component missing from this list still shows up by name in both the
-/// Entities list and the Selected Entity panel; it just can't be expanded
-/// into editable fields.
-const known_components = blk: {
-    var entries: [known.all.len]ComponentEntry = undefined;
-    for (known.all, 0..) |T, i| {
-        entries[i] = .{ .name = shortTypeName(T), .T = T };
-    }
-    var result = entries;
-    // std.mem.sort's block/pdq algorithm does an internal @memcpy that
-    // Zig's comptime aliasing check rejects for this array (works fine at
-    // runtime; comptime evaluation is stricter). insertion sort has no
-    // such merge step and this list is a handful of entries, so it costs
-    // nothing.
-    std.sort.insertion(ComponentEntry, &result, {}, lessThanName);
-    break :blk result;
-};
-
-fn lessThanName(_: void, a: ComponentEntry, b: ComponentEntry) bool {
-    return std.mem.lessThan(u8, a.name, b.name);
-}
-
-/// Strips the module-path prefix off a type's own @typeName, e.g.
-/// `shortTypeName(comps.Position)` -> "Position". Used only for building
-/// `known_components` above; see `shortName` below for the equivalent used
-/// on names read back from live ECS storage (a plain, non-sentinel-
-/// terminated `[]const u8` there, unlike `@typeName`).
-fn shortTypeName(comptime T: type) [:0]const u8 {
-    const full = @typeName(T);
-    if (std.mem.lastIndexOfScalar(u8, full, '.')) |i| return full[i + 1 ..];
-    return full;
-}
-
+/// So there's nothing to register: a component is editable here purely by
+/// virtue of having been `setComponent`'d, no matter which file declares it.
 pub const State = struct {
     selected: ?EntityID = null,
 };
@@ -124,7 +77,7 @@ fn shortName(full_name: []const u8) []const u8 {
 
 /// Builds "<id> : <comp1>, <comp2>, ..." for one entity. Names come from
 /// `getComponentNames()`, straight off live storage -- every component the
-/// entity actually has, not just the ones in `known_components`.
+/// entity actually has.
 fn entityLabel(buf: []u8, id: EntityID, scn: *Scene) ![:0]const u8 {
     var len: usize = (try std.fmt.bufPrint(buf, "{d} : ", .{id})).len;
     const names = scn.entities.getComponentNames(id) orelse &[_][]const u8{};
@@ -146,57 +99,146 @@ fn renderSelected(state: *State, scn: *Scene) void {
     zgui.text("Entity {d}", .{id});
     zgui.separator();
 
-    const names = scn.entities.getComponentNames(id) orelse return;
-    for (names) |full_name| {
-        const short = shortName(full_name);
+    var it = scn.entities.componentsOf(id) orelse return;
+    while (it.next()) |view| {
+        // Scope every widget below by the *full* @typeName. Two components
+        // with the same short name from different modules therefore get
+        // distinct ImGui ids, and each renders its own fields -- matching on
+        // the short name instead would have collapsed them into one.
+        zgui.pushStrId(view.name);
+        defer zgui.popId();
 
-        var matched = false;
-        inline for (known_components) |entry| {
-            if (!matched and std.mem.eql(u8, short, entry.name)) {
-                matched = true;
-                if (scn.entities.getComponent(id, entry.T)) |ptr| {
-                    renderComponent(entry.name, entry.T, ptr);
-                }
-            }
-        }
-        if (!matched) {
-            zgui.text("{s} (no editor registered)", .{short});
-        }
+        renderStruct(view.desc.short_name, view.desc, view.bytes);
     }
 }
 
-fn renderComponent(comptime name: [:0]const u8, comptime T: type, ptr: *T) void {
-    if (zgui.treeNode(name)) {
-        inline for (std.meta.fields(T)) |field| {
-            renderField(T, field, ptr, name);
-        }
-        zgui.treePop();
-    }
-}
+/// One collapsible component (or nested struct field): a tree node with a row
+/// per field. Mutually recursive with `renderField` via `.@"struct"` fields,
+/// which terminates because descriptors only nest by value.
+fn renderStruct(label: [:0]const u8, desc: *const reflect.TypeDescriptor, bytes: []u8) void {
+    if (!zgui.treeNode(label)) return;
+    defer zgui.treePop();
 
-/// Renders one field as an editable widget where the field's type maps
-/// cleanly to an ImGui one (float32 -> drag float, any int width -> drag
-/// int via a cast, bool -> checkbox); anything else (enums, nested structs,
-/// strings, ...) falls back to read-only text for now.
-fn renderField(comptime T: type, comptime field: std.builtin.Type.StructField, ptr: *T, comptime component_name: [:0]const u8) void {
-    const field_ptr = &@field(ptr.*, field.name);
-
-    var label_buf: [64]u8 = undefined;
-    const label: [:0]const u8 = std.fmt.bufPrintZ(&label_buf, "{s}##{s}.{s}", .{ field.name, component_name, field.name }) catch "field";
-
-    switch (@typeInfo(field.type)) {
-        .float => |info| if (info.bits == 32) {
-            _ = zgui.dragFloat(label, .{ .v = field_ptr });
+    if (desc.fields.len == 0) {
+        if (desc.unwalkable) |reason| {
+            zgui.text("(not editable: {s})", .{@tagName(reason)});
         } else {
-            zgui.text("{s}: {any} (unsupported float width)", .{ label, field_ptr.* });
+            // A tag component -- no fields is the whole point of it.
+            zgui.textUnformatted("(no fields)");
+        }
+        return;
+    }
+
+    if (tryColorEdit(desc, bytes)) return;
+
+    for (desc.fields) |field| renderField(field, bytes);
+}
+
+fn renderField(field: reflect.FieldDesc, component_bytes: []u8) void {
+    const bytes = field.bytes(component_bytes);
+
+    // Field names are already sentinel-terminated, and pushStrId gives each
+    // widget a unique id without hand-built "##" label suffixes.
+    zgui.pushStrId(field.name);
+    defer zgui.popId();
+
+    switch (field.kind) {
+        .bool => |access| {
+            var v = access.load(bytes);
+            if (zgui.checkbox(field.name, .{ .v = &v })) access.store(bytes, v);
         },
-        .int => {
-            var scratch: i32 = std.math.lossyCast(i32, field_ptr.*);
-            if (zgui.dragInt(label, .{ .v = &scratch })) {
-                field_ptr.* = std.math.lossyCast(field.type, scratch);
+        .float => |access| if (access.bits == 32) {
+            // Keep f32 on dragFloat so the widget feels exactly as it did
+            // before, rather than detouring through the f64 carrier.
+            var v: f32 = @floatCast(access.load(bytes));
+            if (zgui.dragFloat(field.name, .{ .v = &v })) access.store(bytes, v);
+        } else {
+            var v = access.load(bytes);
+            if (zgui.dragScalar(field.name, f64, .{ .v = &v })) access.store(bytes, v);
+        },
+        // Limits come from the field's real type, so a u8 clamps at 0..255
+        // and can't be dragged into a wrapped value.
+        .int => |access| {
+            var v = access.load(bytes);
+            if (zgui.dragScalar(field.name, i64, .{ .v = &v, .min = access.min, .max = access.max })) {
+                access.store(bytes, v);
             }
         },
-        .bool => _ = zgui.checkbox(label, .{ .v = field_ptr }),
-        else => zgui.text("{s}: {any}", .{ label, field_ptr.* }),
+        .uint => |access| {
+            var v = access.load(bytes);
+            if (zgui.dragScalar(field.name, u64, .{ .v = &v, .min = access.min, .max = access.max })) {
+                access.store(bytes, v);
+            }
+        },
+        .@"enum" => |access| renderEnum(field, access, bytes),
+        .@"struct" => |nested| renderStruct(field.name, nested, bytes),
+        .unsupported => |info| renderReadOnly(field, info, bytes),
     }
+}
+
+/// A dropdown of the enum's own tag names. `store` ignores anything that
+/// isn't one of them, so this can't write an invalid tag.
+fn renderEnum(field: reflect.FieldDesc, access: reflect.EnumAccess, bytes: []u8) void {
+    const current = access.load(bytes);
+    const preview = access.nameOf(current) orelse "(invalid)";
+
+    if (!zgui.beginCombo(field.name, .{ .preview_value = preview })) return;
+    defer zgui.endCombo();
+
+    for (access.values) |value| {
+        if (zgui.selectable(value.name, .{ .selected = value.value == current })) {
+            access.store(bytes, value.value);
+        }
+    }
+}
+
+/// Fields with no widget: shown via the descriptor's `{any}` formatter, or as
+/// raw bytes for the few types that can't be formatted at all.
+fn renderReadOnly(field: reflect.FieldDesc, info: reflect.Unsupported, bytes: []const u8) void {
+    var buf: [128]u8 = undefined;
+
+    if (info.format) |format| {
+        zgui.text("{s}: {s}", .{ field.name, format(bytes, &buf) });
+    } else {
+        zgui.text("{s}: 0x{s} ({s})", .{ field.name, hexDump(bytes, &buf), @tagName(info.reason) });
+    }
+}
+
+fn hexDump(bytes: []const u8, buf: []u8) []const u8 {
+    var len: usize = 0;
+    for (bytes) |byte| {
+        const written = std.fmt.bufPrint(buf[len..], "{x:0>2}", .{byte}) catch break;
+        len += written.len;
+    }
+    return buf[0..len];
+}
+
+/// Collapses a `{ r, g, b, a }` byte struct into a single colour swatch.
+/// Recognised by shape rather than by name, so it covers raylib's Color and
+/// anything else shaped like it without this file knowing either type.
+fn tryColorEdit(desc: *const reflect.TypeDescriptor, bytes: []u8) bool {
+    if (desc.fields.len != 4) return false;
+
+    const channels = [_][]const u8{ "r", "g", "b", "a" };
+    for (desc.fields, channels) |field, expected| {
+        if (!std.mem.eql(u8, field.name, expected)) return false;
+        switch (field.kind) {
+            .uint => |access| if (access.max != 255) return false,
+            else => return false,
+        }
+    }
+
+    var rgba: [4]f32 = undefined;
+    for (desc.fields, 0..) |field, i| {
+        const raw = field.kind.uint.load(field.bytesConst(bytes));
+        rgba[i] = @as(f32, @floatFromInt(raw)) / 255.0;
+    }
+
+    if (zgui.colorEdit4("color", .{ .col = &rgba })) {
+        for (desc.fields, 0..) |field, i| {
+            const scaled = @round(std.math.clamp(rgba[i], 0.0, 1.0) * 255.0);
+            field.kind.uint.store(field.bytes(bytes), @intFromFloat(scaled));
+        }
+    }
+    return true;
 }
