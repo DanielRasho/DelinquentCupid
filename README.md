@@ -35,11 +35,20 @@ zig build run       # Compile & run
 
 ## Architecture
 
-The architecture is heavely inspired in the drafts provided [by this post by the creators of the match engine ](https://devlog.hexops.org/2022/lets-build-ecs-part-1/). The whole idea revolves around 2 main pillars: 
+The architecture is heavely inspired in the drafts provided [by a post written by the creators of the match engine ](https://devlog.hexops.org/2022/lets-build-ecs-part-1/). The whole idea revolves around 2 main pillars: 
 
 1. See the ECS as **Relational DB** with some sprinkles✨ on top.
 2. The data should be as **thighly** pack as possible.
 
 Those to directed the main design decision and data structures giving returning something like this:
 
+- A **Game** is just a set of **Scenes**. 
+- A **Scene** is composed by **Systems** and a **EntityDB**.
+  - A **EntityDB** is a light Relational DB storing components for each entity.
+  - A *System* is just a set of callbacks r
+
+
+In the end
 ![](./docs/architecture1.png)
+
+## Debugging tools
