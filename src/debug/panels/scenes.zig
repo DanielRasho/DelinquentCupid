@@ -1,7 +1,7 @@
 const std = @import("std");
 const zgui = @import("zgui");
 const ecs = @import("ecs");
-const constants = @import("../../game/systems/constants.zig");
+const constants = @import("../../game/constants.zig");
 
 const Game = ecs.Game;
 const Scene = ecs.scene.Scene;

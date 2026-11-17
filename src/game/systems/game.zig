@@ -1,6 +1,6 @@
 const std = @import("std");
 const ecs = @import("ecs");
-const constants = @import("constants.zig");
+const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 
 const Sys = ecs.system.System;
@@ -17,35 +17,32 @@ fn gameSetup(_: *Sys, scn: *Scene) void {
 }
 fn spawnGame(scn: *Scene) !void {
     const id = try scn.entities.new();
-    try scn.entities.setComponent(id, comps.GameStatus{ .status = .READY });
-    try scn.entities.setComponent(id, comps.Lives{ .count = 3 });
-    try scn.entities.setComponent(id, comps.Score{ .broken = 0, .total = 0 });
+    try scn.entities.setComponent(id, comps.Turn{ .phase = .AIMING, .wave = 1 });
+    try scn.entities.setComponent(id, comps.Volley{});
+    try scn.entities.setComponent(id, comps.BallStock{ .count = constants.STARTING_BALLS });
+    try scn.entities.setComponent(id, comps.Wallet{ .coins = 0 });
 }
 fn gameDestroy(_: *Sys, scn: *Scene) void {
-    var it = scn.entities.query(.{comps.GameStatus});
+    var it = scn.entities.query(.{comps.Turn});
     if (it.next()) |id| scn.entities.remove(id);
 
     var req_it = scn.entities.query(.{Game.SwitchRequest});
     if (req_it.next()) |id| scn.entities.remove(id);
 }
 
-/// Once the round is decided (ball/brick systems flip the status), hand over
-/// to the matching end scene. The switch goes through a `SwitchRequest`
-/// entity so the Game only applies it after every system finished this frame.
+/// The block system only *flags* the run as lost; this hands over to the
+/// lose scene. The switch goes through a `SwitchRequest` entity so the Game
+/// only applies it after every system finished this frame.
 fn gameUpdate(_: *Sys, scn: *Scene, _: f32) void {
-    var it = scn.entities.query(.{comps.GameStatus});
-    const status = scn.entities.getComponent(it.next().?, comps.GameStatus).?;
-    const target: []const u8 = switch (status.status) {
-        .WIN => constants.SCENE_WIN,
-        .LOOSE => constants.SCENE_LOSE,
-        .READY, .PLAYING => return,
-    };
+    var it = scn.entities.query(.{comps.Turn});
+    const turn = scn.entities.getComponent(it.next().?, comps.Turn).?;
+    if (turn.phase != .LOST) return;
 
     // Only ever one request in flight.
     var pending = scn.entities.query(.{Game.SwitchRequest});
     if (pending.next() != null) return;
 
-    requestSwitch(scn, target) catch |err| std.debug.panic("game switch request failed: {}", .{err});
+    requestSwitch(scn, constants.SCENE_LOSE) catch |err| std.debug.panic("game switch request failed: {}", .{err});
 }
 fn requestSwitch(scn: *Scene, to: []const u8) !void {
     const id = try scn.entities.new();

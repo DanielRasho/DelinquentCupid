@@ -8,18 +8,17 @@ const c = @cImport({
 const ecs = @import("ecs");
 const Game = ecs.Game;
 const DebugTool = @import("debug/DebugTool.zig").DebugTool;
-const constants = @import("game/systems/constants.zig");
+const constants = @import("game/constants.zig");
 
-// ENTITITES
-const comps = @import("game/components.zig");
-
-// ENTITITES
+// SYSTEMS
 const game_system = @import("game/systems/game.zig").game_system;
-const paddle_system = @import("game/systems/paddle.zig").paddle_system;
+const player_system = @import("game/systems/player.zig").player_system;
+const aim_system = @import("game/systems/aim.zig").aim_system;
+const shop_system = @import("game/systems/shop.zig").shop_system;
 const ball_system = @import("game/systems/ball.zig").ball_system;
-const brick_system = @import("game/systems/brick.zig").brick_system;
+const block_system = @import("game/systems/block.zig").block_system;
 const render_system = @import("game/systems/render.zig").render_system;
-const win_system = @import("game/systems/end_screen.zig").win_system;
+const hud_system = @import("game/systems/hud.zig").hud_system;
 const lose_system = @import("game/systems/end_screen.zig").lose_system;
 
 const WINDOW_W: i32 = @intFromFloat(constants.SCREEN_W);
@@ -27,17 +26,17 @@ const WINDOW_H: i32 = @intFromFloat(constants.SCREEN_H);
 
 fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     var scn = try ecs.scene.Scene.init(allocator);
+    // `Game` goes first: it spawns the singleton every other system reads.
+    // Render callbacks draw in registration order, so `Render` (the field
+    // and what's on it) sits before the systems that draw on top of it.
     try scn.register("Game", game_system);
-    try scn.register("Paddle", paddle_system);
-    try scn.register("Ball", ball_system);
-    try scn.register("Brick", brick_system);
+    try scn.register("Player", player_system);
     try scn.register("Render", render_system);
-    return scn;
-}
-
-fn winScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
-    var scn = try ecs.scene.Scene.init(allocator);
-    try scn.register("WinScreen", win_system);
+    try scn.register("Aim", aim_system);
+    try scn.register("Shop", shop_system);
+    try scn.register("Ball", ball_system);
+    try scn.register("Block", block_system);
+    try scn.register("Hud", hud_system);
     return scn;
 }
 
@@ -74,7 +73,6 @@ pub fn main() !void {
     defer game.deinit();
 
     try game.registerScene(constants.SCENE_GAME, gameplayScene);
-    try game.registerScene(constants.SCENE_WIN, winScene);
     try game.registerScene(constants.SCENE_LOSE, loseScene);
     try game.start(constants.SCENE_GAME);
 

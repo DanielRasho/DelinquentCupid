@@ -1,7 +1,8 @@
 const std = @import("std");
 const rl = @import("raylib");
+const zgui = @import("zgui");
 const ecs = @import("ecs");
-const constants = @import("constants.zig");
+const constants = @import("../constants.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -10,22 +11,23 @@ const Game = ecs.Game;
 const TITLE_FONT_SIZE: i32 = 96;
 const HINT_FONT_SIZE: i32 = 24;
 const HINT_GAP: f32 = 24.0;
-const HINT_TEXT: [:0]const u8 = "Press SPACE to play again";
+const HINT_TEXT: [:0]const u8 = "Click or press SPACE to play again";
 
 // ===================
 // END SCREENS
 // ===================
 
-pub const win_system = EndScreen("YOU WIN", .green);
 pub const lose_system = EndScreen("GAME OVER", .red);
 
 /// Builds a system that draws `title` in the middle of an otherwise empty
-/// screen and goes back to the gameplay scene on SPACE. Each call yields a
+/// screen and goes back to the gameplay scene on a click or SPACE. Each call yields a
 /// distinct system (its own callbacks), so one file serves every end screen.
 fn EndScreen(comptime title: [:0]const u8, comptime title_color: rl.Color) Sys {
     const Impl = struct {
         fn update(_: *Sys, scn: *Scene, _: f32) void {
-            if (!rl.isKeyPressed(.space)) return;
+            // A click on a debug panel is not a click on the screen.
+            const clicked = rl.isMouseButtonPressed(.left) and !zgui.io.getWantCaptureMouse();
+            if (!rl.isKeyPressed(.space) and !clicked) return;
             requestRestart(scn) catch |err| std.debug.panic("end screen restart failed: {}", .{err});
         }
         fn requestRestart(scn: *Scene) !void {
