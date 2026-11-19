@@ -53,7 +53,7 @@ fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     try scn.register("Ball", ball_system);
     try scn.register("Block", block_system);
     try scn.register("Hud", hud_system);
-    try scn.register("Tarot", tarot_system);
+    // try scn.register("Tarot", tarot_system);
     return scn;
 }
 
