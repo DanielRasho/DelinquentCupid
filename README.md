@@ -1,7 +1,11 @@
-<h1 align="center">Zing Zong 🏓</h1>
-<p align="center">A Breakout game implementation in Zig with Raylib + ImGui</p>
+<h1 align="center">Delinquent Cupid🏓</h1>
+<p align="center">A game where you have to "breakout" waves of people declare to your crush❤️ <br/> made in Zig with Raylib + ImGui</p>
 
-Tested with 
+
+**Controls 🖲️:**\
+Your mouse 🐁
+
+**Tested with**
 - Zig `0.16.0`
 - ImGui `1.92.1-docking`
 - Raylib `6.0.0`
