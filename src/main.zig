@@ -47,13 +47,13 @@ fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     try scn.register("Player", player_system);
     try scn.register("Render", render_system);
     try scn.register("Aim", aim_system);
-    // try scn.register("Shop", shop_system);
-    // try scn.register("Girl", girl_system);
-    // try scn.register("Cupid", cupid_system);
+    try scn.register("Shop", shop_system);
+    try scn.register("Girl", girl_system);
+    try scn.register("Cupid", cupid_system);
     try scn.register("Ball", ball_system);
     try scn.register("Block", block_system);
     try scn.register("Hud", hud_system);
-    // try scn.register("Tarot", tarot_system);
+    try scn.register("Tarot", tarot_system);
     return scn;
 }
 

@@ -107,8 +107,8 @@ pub const MAX_DIFFICULTY_WAVE: u32 = 60;
 pub const BALL_RADIUS: f32 = 7;
 /// A ball leaves at `BALL_SPEED_MIN` and gains the same amount of speed on
 /// every block hit, reaching `BALL_SPEED_MAX` after `BALL_HITS_TO_MAX_SPEED`.
-pub const BALL_SPEED_MAX: f32 = 900;
-pub const BALL_SPEED_MIN: f32 = BALL_SPEED_MAX * 2;
+pub const BALL_SPEED_MAX: f32 = 1800;
+pub const BALL_SPEED_MIN: f32 = 1800;
 pub const BALL_HITS_TO_MAX_SPEED: f32 = 7;
 pub const BALL_DAMAGE: u32 = 1;
 /// Seconds between two balls of the same volley leaving the player.
