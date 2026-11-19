@@ -40,7 +40,7 @@ fn aimUpdate(_: *Sys, scn: *Scene, _: f32) void {
     scn.entities.getComponent(game_id, comps.Volley).?.* = .{
         .dir_x = aim.dir.x,
         .dir_y = aim.dir.y,
-        .pending = stock.count,
+        .pending = stock.*,
         .cooldown = 0,
     };
     turn.phase = .FIRING;

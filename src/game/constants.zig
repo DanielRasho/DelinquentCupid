@@ -113,7 +113,41 @@ pub const BALL_HITS_TO_MAX_SPEED: f32 = 7;
 pub const BALL_DAMAGE: u32 = 1;
 /// Seconds between two balls of the same volley leaving the player.
 pub const BALL_LAUNCH_INTERVAL: f32 = 0.07;
+/// Normal spheres a run starts with.
 pub const STARTING_BALLS: u32 = 1;
+
+// ===================
+// SPHERE KINDS (what the shop rolls; see `spheres.zig`)
+// ===================
+/// Chance (0-100) that a bought sphere comes out as each kind.
+pub const NORMAL_SPHERE_CHANCE: u32 = 60;
+pub const FIRE_SPHERE_CHANCE: u32 = 8;
+pub const BOMB_SPHERE_CHANCE: u32 = 8;
+pub const ROW_LASER_CHANCE: u32 = 8;
+pub const COLUMN_LASER_CHANCE: u32 = 8;
+pub const CROSS_LASER_CHANCE: u32 = 8;
+
+/// A special sphere's effect goes off on its first block hit and then on
+/// every this-many hits after (with 2: the 1st, 3rd, 5th... hit).
+pub const FIRE_EVERY: u32 = 2;
+pub const BOMB_EVERY: u32 = 2;
+pub const ROW_LASER_EVERY: u32 = 3;
+pub const COLUMN_LASER_EVERY: u32 = 3;
+pub const CROSS_LASER_EVERY: u32 = 3;
+
+/// What fire deals to each block next to the one hit. Flat: Strength cards
+/// don't add to it. Bombs and lasers deal the sphere's own damage instead.
+pub const FIRE_DAMAGE: u32 = 1;
+/// How long the flash over the cells an effect struck stays on screen.
+pub const EFFECT_FLASH_TIME: f32 = 0.3;
+
+comptime {
+    const total = NORMAL_SPHERE_CHANCE + FIRE_SPHERE_CHANCE + BOMB_SPHERE_CHANCE +
+        ROW_LASER_CHANCE + COLUMN_LASER_CHANCE + CROSS_LASER_CHANCE;
+    if (total != 100) @compileError("sphere chances must add up to 100");
+    if (@min(FIRE_EVERY, BOMB_EVERY, ROW_LASER_EVERY, COLUMN_LASER_EVERY, CROSS_LASER_EVERY) == 0)
+        @compileError("a sphere effect can't go off every 0 hits");
+}
 
 // ===================
 // PLAYER / AIM

@@ -1,3 +1,4 @@
+const std = @import("std");
 const constants = @import("constants.zig");
 
 // ===================
@@ -34,6 +35,14 @@ pub const Gold = struct {};
 
 pub const Ball = struct {};
 
+/// The kinds of spirit sphere. All of them hit like a normal one; the
+/// others also set off an effect around the block they hit (`spheres.zig`).
+pub const SphereKind = enum { NORMAL, FIRE, BOMB, ROW_LASER, COLUMN_LASER, CROSS_LASER };
+
+/// On every ball: its kind, and how many blocks it has hit so far (which
+/// decides when its effect goes off again).
+pub const Sphere = struct { kind: SphereKind = .NORMAL, hits: u32 = 0 };
+
 /// `Position` is the centre of the player's cube; only x ever changes.
 /// `next_x` is where the first ball of the current volley landed, valid
 /// while `landed` is set; the player moves there once the volley is over.
@@ -58,11 +67,36 @@ pub const Phase = enum {
     WON,
 };
 pub const Turn = struct { phase: Phase, wave: u32 };
-/// The volley being fired: unit direction, balls still to launch, and the
-/// time left until the next one leaves.
-pub const Volley = struct { dir_x: f32 = 0, dir_y: f32 = -1, pending: u32 = 0, cooldown: f32 = 0 };
-/// How many balls a volley launches.
-pub const BallStock = struct { count: u32 };
+/// The volley being fired: unit direction, the spheres still to launch (a
+/// copy of `BallStock` taken on the click), and the time left until the
+/// next one leaves.
+pub const Volley = struct { dir_x: f32 = 0, dir_y: f32 = -1, pending: BallStock = .{}, cooldown: f32 = 0 };
+/// How many spheres of each kind are owned; a volley launches all of them.
+pub const BallStock = struct {
+    normal: u32 = 0,
+    fire: u32 = 0,
+    bomb: u32 = 0,
+    row_laser: u32 = 0,
+    column_laser: u32 = 0,
+    cross_laser: u32 = 0,
+
+    pub fn of(self: *BallStock, kind: SphereKind) *u32 {
+        return switch (kind) {
+            .NORMAL => &self.normal,
+            .FIRE => &self.fire,
+            .BOMB => &self.bomb,
+            .ROW_LASER => &self.row_laser,
+            .COLUMN_LASER => &self.column_laser,
+            .CROSS_LASER => &self.cross_laser,
+        };
+    }
+
+    pub fn total(self: BallStock) u32 {
+        var sum: u32 = 0;
+        inline for (std.meta.fields(BallStock)) |f| sum += @field(self, f.name);
+        return sum;
+    }
+};
 /// Earned by removing blocks, spent on spheres.
 pub const LovePoints = struct { points: u32 = 0 };
 /// Earned by hitting blocks, spent on cupid's abilities. Capped at `SPIRIT_MAX`.
@@ -85,6 +119,14 @@ pub const TarotDraw = struct {
 };
 /// Block hits landed by the volley in flight; back to 0 when the turn ends.
 pub const Combo = struct { hits: u32 = 0 };
+
+// ===================
+// EFFECTS
+// ===================
+
+/// A fading highlight over the cells a sphere's effect just struck. Its
+/// rectangle is the entity's `Position` + `Size`. Owned by `effects.zig`.
+pub const Flash = struct { kind: SphereKind, time_left: f32 };
 
 // ===================
 // GIRL (the portrait on the left reacts to what happens on the field)

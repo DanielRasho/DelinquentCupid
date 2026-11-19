@@ -1,8 +1,11 @@
 const std = @import("std");
+const rl = @import("raylib");
 const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
+const spheres = @import("../spheres.zig");
+const effects = @import("effects.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -34,7 +37,7 @@ fn ballUpdate(_: *Sys, scn: *Scene, dt: f32) void {
     launch(scn, game_id, dt) catch |err| std.debug.panic("ball launch failed: {}", .{err});
     fly(scn, dt) catch |err| std.debug.panic("ball update failed: {}", .{err});
 
-    const pending = scn.entities.getComponent(game_id, comps.Volley).?.pending;
+    const pending = scn.entities.getComponent(game_id, comps.Volley).?.pending.total();
     var left_it = scn.entities.query(.{comps.Ball});
     if (pending == 0 and left_it.next() == null) {
         scn.entities.getComponent(game_id, comps.Combo).?.hits = 0;
@@ -46,36 +49,58 @@ fn launch(scn: *Scene, game_id: EntityID, dt: f32) !void {
     // Spawning moves entities between archetypes, so work on a copy of the
     // volley and write it back at the end instead of holding a pointer.
     var volley = scn.entities.getComponent(game_id, comps.Volley).?.*;
-    if (volley.pending == 0) return;
+    if (volley.pending.total() == 0) return;
 
     var player_it = scn.entities.query(.{ comps.Player, comps.Position });
     const player_x = scn.entities.getComponent(player_it.next().?, comps.Position).?.x;
     const origin = field.launchPoint(player_x);
 
     volley.cooldown -= dt;
-    while (volley.pending > 0 and volley.cooldown <= 0) {
+    while (volley.pending.total() > 0 and volley.cooldown <= 0) {
         const id = try scn.entities.new();
         try scn.entities.setComponent(id, comps.Ball{});
+        try scn.entities.setComponent(id, comps.Sphere{ .kind = takeRandom(&volley.pending) });
         try scn.entities.setComponent(id, comps.Position{ .x = origin.x, .y = origin.y });
         try scn.entities.setComponent(id, comps.Velocity{
             .x = volley.dir_x * constants.BALL_SPEED_MIN,
             .y = volley.dir_y * constants.BALL_SPEED_MIN,
         });
         try scn.entities.setComponent(id, comps.Circle{ .radius = constants.BALL_RADIUS });
-        volley.pending -= 1;
         volley.cooldown += constants.BALL_LAUNCH_INTERVAL;
     }
 
     scn.entities.getComponent(game_id, comps.Volley).?.* = volley;
 }
 
+/// Takes one sphere out of `pending`, picked at random among those left so
+/// the kinds come out mixed rather than in batches.
+fn takeRandom(pending: *comps.BallStock) comps.SphereKind {
+    var pick: u32 = @intCast(rl.getRandomValue(0, @intCast(pending.total() - 1)));
+    for (std.enums.values(comps.SphereKind)) |kind| {
+        const left = pending.of(kind);
+        if (pick < left.*) {
+            left.* -= 1;
+            return kind;
+        }
+        pick -= left.*;
+    }
+    unreachable;
+}
+
+/// A special sphere's effect that went off: what kind, around which block.
+const Struck = struct { kind: comps.SphereKind, hit: comps.GridCell };
+
 fn fly(scn: *Scene, dt: f32) !void {
     // Balls that reached the floor; removed after the loop, never during it.
     var returned: std.ArrayList(EntityID) = .empty;
     defer returned.deinit(scn.allocator);
+    // Effects that went off; their flashes are spawned after the loop too.
+    var struck: std.ArrayList(Struck) = .empty;
+    defer struck.deinit(scn.allocator);
 
-    var it = scn.entities.query(.{ comps.Ball, comps.Position, comps.Velocity, comps.Circle });
+    var it = scn.entities.query(.{ comps.Ball, comps.Sphere, comps.Position, comps.Velocity, comps.Circle });
     while (it.next()) |id| {
+        const sphere = scn.entities.getComponent(id, comps.Sphere).?;
         const pos = scn.entities.getComponent(id, comps.Position).?;
         const vel = scn.entities.getComponent(id, comps.Velocity).?;
         const radius = scn.entities.getComponent(id, comps.Circle).?.radius;
@@ -108,11 +133,12 @@ fn fly(scn: *Scene, dt: f32) !void {
                 break;
             }
 
-            bounceOffBlocks(scn, pos, vel, radius);
+            if (bounceOffBlocks(scn, sphere, pos, vel, radius)) |effect| try struck.append(scn.allocator, effect);
         }
     }
 
     for (returned.items) |id| scn.entities.remove(id);
+    for (struck.items) |effect| try effects.flash(scn, effect.kind, effect.hit);
 }
 
 /// The first ball of a volley to land decides where the player goes next.
@@ -125,9 +151,10 @@ fn markLanding(scn: *Scene, x: f32) void {
 }
 
 /// Bounces the ball off the block it overlaps the most (if any) and damages
-/// it. Only ever flips one velocity axis, so |vel.y| never decays and every
-/// ball is guaranteed to come back down.
-fn bounceOffBlocks(scn: *Scene, pos: *comps.Position, vel: *comps.Velocity, radius: f32) void {
+/// it, plus the blocks around it when the sphere's effect goes off (returned
+/// so its flash can be spawned). Only ever flips one velocity axis, so
+/// |vel.y| never decays and every ball is guaranteed to come back down.
+fn bounceOffBlocks(scn: *Scene, sphere: *comps.Sphere, pos: *comps.Position, vel: *comps.Velocity, radius: f32) ?Struck {
     var hit_id: ?EntityID = null;
     var hit_dist_sq: f32 = radius * radius;
     var hit_x: f32 = 0;
@@ -151,7 +178,7 @@ fn bounceOffBlocks(scn: *Scene, pos: *comps.Position, vel: *comps.Velocity, radi
         hit_y = cy;
     }
 
-    const id = hit_id orelse return;
+    const id = hit_id orelse return null;
     const dx = pos.x - hit_x;
     const dy = pos.y - hit_y;
 
@@ -193,8 +220,9 @@ fn bounceOffBlocks(scn: *Scene, pos: *comps.Position, vel: *comps.Velocity, radi
     var game_it = scn.entities.query(.{comps.Turn});
     const game_id = game_it.next().?;
     const strength = scn.entities.getComponent(game_id, comps.Upgrades).?.strength;
+    const damage = constants.BALL_DAMAGE + strength;
     const health = scn.entities.getComponent(id, comps.Health).?;
-    health.current -|= constants.BALL_DAMAGE + strength;
+    health.current -|= damage;
     scn.entities.getComponent(game_id, comps.Combo).?.hits += 1;
     const spirit = scn.entities.getComponent(game_id, comps.Spirit).?;
     spirit.points = @min(spirit.points + constants.SPIRIT_PER_HIT, constants.SPIRIT_MAX);
@@ -206,4 +234,30 @@ fn bounceOffBlocks(scn: *Scene, pos: *comps.Position, vel: *comps.Velocity, radi
     const scale = @min(speed + gain, constants.BALL_SPEED_MAX) / speed;
     vel.x *= scale;
     vel.y *= scale;
+
+    const goes_off = spheres.goesOff(sphere.*);
+    sphere.hits += 1;
+    if (!goes_off) return null;
+    const hit_cell = scn.entities.getComponent(id, comps.GridCell).?.*;
+    setOff(scn, sphere.kind, id, hit_cell, damage);
+    return .{ .kind = sphere.kind, .hit = hit_cell };
+}
+
+/// A special sphere's effect, from the block it hit (`hit_id`, covering
+/// `hit`): every *other* live block the effect reaches takes the effect's
+/// damage, once even if it's in several of its areas. Like the sphere's own
+/// hit it only lowers `Health`; the block system removes what reaches 0.
+/// It's not a hit itself: no combo, spirit or speed-up.
+fn setOff(scn: *Scene, kind: comps.SphereKind, hit_id: EntityID, hit: comps.GridCell, sphere_damage: u32) void {
+    const areas = spheres.effectAreas(kind, hit);
+    const damage = spheres.effectDamage(kind, sphere_damage);
+
+    var it = scn.entities.query(.{ comps.Block, comps.GridCell, comps.Health });
+    while (it.next()) |id| {
+        if (id == hit_id) continue;
+        const health = scn.entities.getComponent(id, comps.Health).?;
+        if (health.current == 0) continue;
+        if (!areas.reach(scn.entities.getComponent(id, comps.GridCell).?.*)) continue;
+        health.current -|= damage;
+    }
 }

@@ -4,6 +4,7 @@ const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
+const spheres = @import("../spheres.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -86,7 +87,10 @@ fn gameRender(_: *Sys, scn: *Scene) void {
     while (ball_it.next()) |id| {
         const pos = scn.entities.getComponent(id, comps.Position).?;
         const circle = scn.entities.getComponent(id, comps.Circle).?;
-        rl.drawCircleV(.{ .x = pos.x, .y = pos.y }, circle.radius, .white);
+        // Each kind of sphere has its own colour.
+        const sphere = scn.entities.getComponent(id, comps.Sphere);
+        const color = if (sphere) |s| spheres.info(s.kind).color else rl.Color.white;
+        rl.drawCircleV(.{ .x = pos.x, .y = pos.y }, circle.radius, color);
     }
 
     var player_it = scn.entities.query(.{ comps.Player, comps.Position });

@@ -19,6 +19,7 @@ const girl_system = @import("game/systems/girl.zig").girl_system;
 const cupid_system = @import("game/systems/cupid.zig").cupid_system;
 const ball_system = @import("game/systems/ball.zig").ball_system;
 const block_system = @import("game/systems/block.zig").block_system;
+const effects_system = @import("game/systems/effects.zig").effects_system;
 const tarot_system = @import("game/systems/tarot.zig").tarot_system;
 const render_system = @import("game/systems/render.zig").render_system;
 const hud_system = @import("game/systems/hud.zig").hud_system;
@@ -51,6 +52,7 @@ fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     try scn.register("Girl", girl_system);
     try scn.register("Cupid", cupid_system);
     try scn.register("Ball", ball_system);
+    try scn.register("Effects", effects_system);
     try scn.register("Block", block_system);
     try scn.register("Hud", hud_system);
     try scn.register("Tarot", tarot_system);
@@ -124,4 +126,9 @@ pub fn main() !void {
         if (show_debug) debug_tool.render(dt, game);
         c.rlImGuiEnd();
     }
+}
+
+// `zig build test` only collects tests from files a test block references.
+test {
+    _ = @import("game/spheres.zig");
 }
