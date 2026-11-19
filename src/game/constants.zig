@@ -1,23 +1,58 @@
-pub const SCREEN_W: f32 = 1024;
+pub const SCREEN_W: f32 = 1500;
 pub const SCREEN_H: f32 = 768;
 
 // Scene names, as registered on `Game.instance` in main.zig.
+pub const SCENE_MENU = "menu";
 pub const SCENE_GAME = "game";
+pub const SCENE_WIN = "win";
 pub const SCENE_LOSE = "lose";
 
+/// Reaching this wave wins the run.
+pub const WIN_WAVE: u32 = 100;
+
 // ===================
-// FIELD (the grid the blocks live in)
+// LAYOUT: [ left column | stage | right column ]
+// ===================
+/// Side of a square tile of the stage's tileset. One block fills one tile.
+pub const TILE_SIZE: f32 = 72;
+
+/// Full width of each side column. THE knob for how much room the stage
+/// gets: the stage is whatever the two columns leave free. The stage is a
+/// whole number of tiles wide when `SCREEN_W - 2 * COLUMN_W` is a multiple
+/// of `TILE_SIZE` (1500 - 2 * 318 = 864 = 12 tiles).
+pub const COLUMN_W: f32 = 318;
+/// Empty space between a column's edge and its widgets.
+pub const COLUMN_PADDING: f32 = 12;
+pub const COLUMN_CONTENT_W: f32 = COLUMN_W - 2 * COLUMN_PADDING;
+pub const LEFT_COLUMN_X: f32 = COLUMN_PADDING;
+pub const RIGHT_COLUMN_X: f32 = SCREEN_W - COLUMN_W + COLUMN_PADDING;
+pub const PORTRAIT_Y: f32 = 12;
+pub const PORTRAIT_H: f32 = 200;
+/// Where the widgets under a portrait start.
+pub const COLUMN_BODY_Y: f32 = PORTRAIT_Y + PORTRAIT_H + 16;
+
+/// The stage: the area between the columns where the game art (tilemap) goes.
+pub const STAGE_X: f32 = COLUMN_W;
+pub const STAGE_W: f32 = SCREEN_W - 2 * COLUMN_W;
+
+// ===================
+// FIELD (the grid the blocks live in, centred on the stage)
 // ===================
 pub const GRID_COLS: u8 = 6;
 pub const GRID_ROWS: u8 = 8;
-pub const CELL_SIZE: f32 = 72;
+pub const CELL_SIZE: f32 = TILE_SIZE;
 
 pub const FIELD_W: f32 = CELL_SIZE * @as(f32, GRID_COLS);
 pub const FIELD_H: f32 = CELL_SIZE * @as(f32, GRID_ROWS);
-pub const FIELD_LEFT: f32 = (SCREEN_W - FIELD_W) / 2.0;
+pub const FIELD_LEFT: f32 = STAGE_X + (STAGE_W - FIELD_W) / 2.0;
 pub const FIELD_RIGHT: f32 = FIELD_LEFT + FIELD_W;
-pub const FIELD_TOP: f32 = 56;
+/// One tile of room above the field (the wave counter lives there).
+pub const FIELD_TOP: f32 = TILE_SIZE;
 pub const FIELD_BOTTOM: f32 = FIELD_TOP + FIELD_H;
+
+comptime {
+    if (STAGE_W < FIELD_W) @compileError("COLUMN_W leaves no room for the field: shrink it or widen SCREEN_W");
+}
 
 /// A block that descends into this row ends the run. It's the last row, so
 /// the player always has one empty row of room to aim in.
@@ -34,7 +69,32 @@ pub const BLOCK_FILL_CHANCE: i32 = 55;
 pub const BLOCK_DOUBLE_CHANCE: i32 = 15;
 pub const BLOCK_HP_BASE: u32 = 1;
 pub const BLOCK_HP_PER_TIER: u32 = 2;
-pub const BLOCK_COIN_REWARD: u32 = 10;
+/// Global health multiplier, in percent, applied on top of the curve above.
+pub const BLOCK_HP_PERCENT: u32 = 125;
+/// Love points earned per block removed (before tarot bonuses).
+pub const BLOCK_LOVE_REWARD: u32 = 10;
+
+/// Chance (0-100) that a regular block spawns as a gold one.
+pub const GOLD_CHANCE: i32 = 10;
+pub const GOLD_LOVE_REWARD: u32 = 30;
+
+/// Mini bosses: 2 x 2 blocks, at most one per spawned row. Their chance
+/// grows linearly from 0 at `BOSS_FIRST_WAVE` up to `BOSS_CHANCE_MAX`
+/// (0-100) at `BOSS_FULL_CHANCE_WAVE`, and stays there.
+pub const BOSS_COLS: u8 = 2;
+pub const BOSS_ROWS: u8 = 2;
+pub const BOSS_CHANCE_MAX: u32 = 15;
+pub const BOSS_FIRST_WAVE: u32 = 5;
+pub const BOSS_FULL_CHANCE_WAVE: u32 = 40;
+/// A boss has this many times the health of a regular block of its wave.
+pub const BOSS_HP_MULTIPLIER: u32 = 4;
+pub const BOSS_LOVE_REWARD: u32 = 40;
+
+comptime {
+    if (BOSS_FULL_CHANCE_WAVE <= BOSS_FIRST_WAVE) @compileError("BOSS_FULL_CHANCE_WAVE must come after BOSS_FIRST_WAVE");
+    // Bosses spawn on the top rows and need a gap beside them in their row.
+    if (BOSS_COLS >= GRID_COLS or BOSS_ROWS >= DANGER_ROW) @compileError("mini boss doesn't fit the grid");
+}
 
 /// Difficulty goes up one tier every `WAVES_PER_TIER` waves and stops
 /// growing at `MAX_DIFFICULTY_WAVE`.
@@ -48,12 +108,12 @@ pub const BALL_RADIUS: f32 = 7;
 /// A ball leaves at `BALL_SPEED_MIN` and gains the same amount of speed on
 /// every block hit, reaching `BALL_SPEED_MAX` after `BALL_HITS_TO_MAX_SPEED`.
 pub const BALL_SPEED_MAX: f32 = 900;
-pub const BALL_SPEED_MIN: f32 = BALL_SPEED_MAX / 2.0;
+pub const BALL_SPEED_MIN: f32 = BALL_SPEED_MAX * 2;
 pub const BALL_HITS_TO_MAX_SPEED: f32 = 7;
 pub const BALL_DAMAGE: u32 = 1;
 /// Seconds between two balls of the same volley leaving the player.
 pub const BALL_LAUNCH_INTERVAL: f32 = 0.07;
-pub const STARTING_BALLS: u32 = 3;
+pub const STARTING_BALLS: u32 = 1;
 
 // ===================
 // PLAYER / AIM
@@ -62,13 +122,51 @@ pub const PLAYER_SIZE: f32 = 28;
 /// Shallowest shot allowed, in radians above the horizontal. Bounces only
 /// ever flip a velocity axis, so this also bounds how long a ball can stay up.
 pub const AIM_MIN_ANGLE: f32 = 0.14;
-/// How much of the path after the first bounce the aim ray previews.
-pub const AIM_BOUNCE_LENGTH: f32 = 160;
+/// Longest the aim preview line gets, in pixels (one cell is `CELL_SIZE` = 72).
+/// It still stops early at the first wall or block it touches.
+pub const AIM_RAY_MAX_LENGTH: f32 = 300;
 
 // ===================
-// SHOP
+// SHOP (love points -> spheres)
 // ===================
-pub const SHOP_SMALL_AMOUNT: u32 = 1;
-pub const SHOP_SMALL_COST: u32 = 40;
-pub const SHOP_BIG_AMOUNT: u32 = 6;
-pub const SHOP_BIG_COST: u32 = 220;
+pub const SPHERE_COST: u32 = 40;
+
+// ===================
+// GIRL
+// ===================
+/// How long she stays happy after love points come in.
+pub const GIRL_HAPPY_TIME: f32 = 0.8;
+/// She gets scared once a block is this many rows (or fewer) from the danger row.
+pub const GIRL_SCARED_ROWS: u8 = 2;
+/// Block hits in a single volley (the combo) that make her happy, super
+/// happy and super super happy.
+pub const GIRL_HAPPY_HITS: u32 = 5;
+pub const GIRL_SUPER_HAPPY_HITS: u32 = 15;
+pub const GIRL_SUPER_SUPER_HAPPY_HITS: u32 = 30;
+
+// ===================
+// CUPID (spirit meter + abilities)
+// ===================
+pub const SPIRIT_MAX: u32 = 100;
+/// Spirit points earned every time a sphere hits a block.
+pub const SPIRIT_PER_HIT: u32 = 1;
+
+pub const INTIMIDATION_COST: u32 = 30;
+pub const INTIMIDATION_ROWS: u8 = 3;
+/// Percent of each block's *max* health removed.
+pub const INTIMIDATION_PERCENT: u32 = 25;
+
+pub const KABEDON_COST: u32 = 50;
+pub const KABEDON_COLUMNS: u8 = 3;
+pub const KABEDON_PERCENT: u32 = 50;
+
+pub const ORA_COST: u32 = 80;
+pub const ORA_ROWS: u8 = 2;
+
+// ===================
+// TAROT
+// ===================
+/// Cards are offered every time the wave number hits a multiple of this.
+pub const TAROT_EVERY: u32 = 10;
+/// How many cards the player picks one from.
+pub const TAROT_OPTIONS: usize = 3;

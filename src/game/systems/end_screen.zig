@@ -17,6 +17,7 @@ const HINT_TEXT: [:0]const u8 = "Click or press SPACE to play again";
 // END SCREENS
 // ===================
 
+// Winning has its own scene, see victory.zig.
 pub const lose_system = EndScreen("GAME OVER", .red);
 
 /// Builds a system that draws `title` in the middle of an otherwise empty

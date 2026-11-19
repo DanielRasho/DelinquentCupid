@@ -14,13 +14,13 @@ const Scene = ecs.scene.Scene;
 // ===================
 pub const aim_system = Sys{ .update = aimUpdate, .render = aimRender };
 
-/// The previewed path: `origin` -> `bounce` (first thing the ball touches)
-/// -> `end` (a stretch of the reflected path).
+/// The previewed path: `origin` -> `end`, which is the first thing the ball
+/// touches (`hits` set) or, if that's farther, `AIM_RAY_MAX_LENGTH` away.
 const Aim = struct {
     origin: rl.Vector2,
     dir: rl.Vector2,
-    bounce: rl.Vector2,
     end: rl.Vector2,
+    hits: bool,
 };
 
 /// A left click inside the field fires the volley toward the cursor.
@@ -52,9 +52,9 @@ fn aimRender(_: *Sys, scn: *Scene) void {
     if (turn.phase != .AIMING) return;
 
     const aim = computeAim(scn) orelse return;
-    rl.drawLineEx(aim.origin, aim.bounce, 2.0, .yellow);
-    rl.drawLineEx(aim.bounce, aim.end, 2.0, rl.fade(.yellow, 0.45));
-    rl.drawCircleV(aim.bounce, constants.BALL_RADIUS, rl.fade(.yellow, 0.6));
+    rl.drawLineEx(aim.origin, aim.end, 2.0, .yellow);
+    // The ghost ball only marks a real contact, not a line cut short.
+    if (aim.hits) rl.drawCircleV(aim.end, constants.BALL_RADIUS, rl.fade(.yellow, 0.6));
 }
 
 fn computeAim(scn: *Scene) ?Aim {
@@ -68,20 +68,10 @@ fn computeAim(scn: *Scene) ?Aim {
     const angle = std.math.clamp(raw, constants.AIM_MIN_ANGLE, std.math.pi - constants.AIM_MIN_ANGLE);
     const dir = rl.Vector2{ .x = @cos(angle), .y = -@sin(angle) };
 
-    const first = castRay(scn, origin, dir);
-    const bounce = pointAt(origin, dir, first.t);
-
-    // Mirror the direction on the surface that was hit.
-    const dot = dir.x * first.normal.x + dir.y * first.normal.y;
-    const reflected = rl.Vector2{ .x = dir.x - 2 * dot * first.normal.x, .y = dir.y - 2 * dot * first.normal.y };
-    const second = castRay(scn, bounce, reflected);
-
-    return .{
-        .origin = origin,
-        .dir = dir,
-        .bounce = bounce,
-        .end = pointAt(bounce, reflected, @min(second.t, constants.AIM_BOUNCE_LENGTH)),
-    };
+    const hit = castRay(scn, origin, dir);
+    const hits = hit.t <= constants.AIM_RAY_MAX_LENGTH;
+    const length = if (hits) hit.t else constants.AIM_RAY_MAX_LENGTH;
+    return .{ .origin = origin, .dir = dir, .end = pointAt(origin, dir, length), .hits = hits };
 }
 
 fn pointAt(origin: rl.Vector2, dir: rl.Vector2, t: f32) rl.Vector2 {

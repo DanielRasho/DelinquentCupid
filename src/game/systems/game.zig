@@ -20,7 +20,11 @@ fn spawnGame(scn: *Scene) !void {
     try scn.entities.setComponent(id, comps.Turn{ .phase = .AIMING, .wave = 1 });
     try scn.entities.setComponent(id, comps.Volley{});
     try scn.entities.setComponent(id, comps.BallStock{ .count = constants.STARTING_BALLS });
-    try scn.entities.setComponent(id, comps.Wallet{ .coins = 0 });
+    try scn.entities.setComponent(id, comps.LovePoints{});
+    try scn.entities.setComponent(id, comps.Spirit{});
+    try scn.entities.setComponent(id, comps.Upgrades{});
+    try scn.entities.setComponent(id, comps.TarotDraw{});
+    try scn.entities.setComponent(id, comps.Combo{});
 }
 fn gameDestroy(_: *Sys, scn: *Scene) void {
     var it = scn.entities.query(.{comps.Turn});
@@ -30,19 +34,23 @@ fn gameDestroy(_: *Sys, scn: *Scene) void {
     if (req_it.next()) |id| scn.entities.remove(id);
 }
 
-/// The block system only *flags* the run as lost; this hands over to the
-/// lose scene. The switch goes through a `SwitchRequest` entity so the Game
+/// The block system only *flags* the run as lost or won; this hands over to
+/// the matching scene. The switch goes through a `SwitchRequest` entity so the Game
 /// only applies it after every system finished this frame.
 fn gameUpdate(_: *Sys, scn: *Scene, _: f32) void {
     var it = scn.entities.query(.{comps.Turn});
     const turn = scn.entities.getComponent(it.next().?, comps.Turn).?;
-    if (turn.phase != .LOST) return;
+    const target: []const u8 = switch (turn.phase) {
+        .LOST => constants.SCENE_LOSE,
+        .WON => constants.SCENE_WIN,
+        else => return,
+    };
 
     // Only ever one request in flight.
     var pending = scn.entities.query(.{Game.SwitchRequest});
     if (pending.next() != null) return;
 
-    requestSwitch(scn, constants.SCENE_LOSE) catch |err| std.debug.panic("game switch request failed: {}", .{err});
+    requestSwitch(scn, target) catch |err| std.debug.panic("game switch request failed: {}", .{err});
 }
 fn requestSwitch(scn: *Scene, to: []const u8) !void {
     const id = try scn.entities.new();

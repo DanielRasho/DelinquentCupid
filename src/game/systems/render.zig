@@ -16,9 +16,35 @@ const HEALTH_FONT_SIZE: i32 = 24;
 // RENDER: the greybox world (field, blocks, balls, player).
 // ===================
 
+/// Stand-in for the tilemap: a checkerboard of the stage's square tiles,
+/// clipped to the stage (tiles cut by its edges show partially).
+fn drawStage() void {
+    const stage = field.stage;
+    const tile = constants.TILE_SIZE;
+    const first_col: i32 = @intFromFloat(@floor((stage.x - constants.FIELD_LEFT) / tile));
+    const last_col: i32 = @intFromFloat(@ceil((stage.x + stage.width - constants.FIELD_LEFT) / tile));
+    const first_row: i32 = @intFromFloat(@floor((stage.y - constants.FIELD_TOP) / tile));
+    const last_row: i32 = @intFromFloat(@ceil((stage.y + stage.height - constants.FIELD_TOP) / tile));
+
+    rl.beginScissorMode(@intFromFloat(stage.x), @intFromFloat(stage.y), @intFromFloat(stage.width), @intFromFloat(stage.height));
+    defer rl.endScissorMode();
+
+    var row = first_row;
+    while (row < last_row) : (row += 1) {
+        var col = first_col;
+        while (col < last_col) : (col += 1) {
+            const is_dark = @mod(col + row, 2) == 0;
+            const shade: u8 = if (is_dark) 58 else 66;
+            rl.drawRectangleRec(field.tileRect(col, row), rl.Color.init(shade, shade + 6, shade + 14, 255));
+        }
+    }
+}
+
 fn gameRender(_: *Sys, scn: *Scene) void {
+    drawStage();
+
     // Field, plus the line a block must not cross.
-    rl.drawRectangleRec(field.rect, rl.Color.init(40, 44, 52, 255));
+    rl.drawRectangleRec(field.rect, rl.fade(.black, 0.45));
     const danger_y = constants.FIELD_TOP + @as(f32, @floatFromInt(constants.DANGER_ROW)) * constants.CELL_SIZE;
     rl.drawLineEx(
         .{ .x = constants.FIELD_LEFT, .y = danger_y },
@@ -35,11 +61,13 @@ fn gameRender(_: *Sys, scn: *Scene) void {
         const health = scn.entities.getComponent(id, comps.Health).?;
         if (health.current == 0) continue;
 
-        // The more damaged a block is, the darker it gets.
+        // The more damaged a block is, the darker it gets. Gold blocks are yellow.
         const left: f32 = @as(f32, @floatFromInt(health.current)) / @as(f32, @floatFromInt(@max(health.max, 1)));
         const shade: u8 = @intFromFloat(90.0 + 110.0 * std.math.clamp(left, 0.0, 1.0));
+        const is_gold = scn.entities.getComponent(id, comps.Gold) != null;
+        const color = if (is_gold) rl.Color.init(shade + 55, shade + 40, 0, 255) else rl.Color.init(shade, shade, shade, 255);
         const rect = rl.Rectangle{ .x = pos.x, .y = pos.y, .width = size.width, .height = size.height };
-        rl.drawRectangleRec(rect, rl.Color.init(shade, shade, shade, 255));
+        rl.drawRectangleRec(rect, color);
         rl.drawRectangleLinesEx(rect, 2.0, .black);
 
         var buf: [16]u8 = undefined;

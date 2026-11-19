@@ -37,6 +37,7 @@ fn ballUpdate(_: *Sys, scn: *Scene, dt: f32) void {
     const pending = scn.entities.getComponent(game_id, comps.Volley).?.pending;
     var left_it = scn.entities.query(.{comps.Ball});
     if (pending == 0 and left_it.next() == null) {
+        scn.entities.getComponent(game_id, comps.Combo).?.hits = 0;
         scn.entities.getComponent(game_id, comps.Turn).?.phase = .ADVANCING;
     }
 }
@@ -187,8 +188,16 @@ fn bounceOffBlocks(scn: *Scene, pos: *comps.Position, vel: *comps.Velocity, radi
         vel.y = side * @abs(vel.y);
     }
 
+    // Every hit hurts the block (harder with Strength cards) and charges
+    // cupid's spirit meter.
+    var game_it = scn.entities.query(.{comps.Turn});
+    const game_id = game_it.next().?;
+    const strength = scn.entities.getComponent(game_id, comps.Upgrades).?.strength;
     const health = scn.entities.getComponent(id, comps.Health).?;
-    health.current -|= constants.BALL_DAMAGE;
+    health.current -|= constants.BALL_DAMAGE + strength;
+    scn.entities.getComponent(game_id, comps.Combo).?.hits += 1;
+    const spirit = scn.entities.getComponent(game_id, comps.Spirit).?;
+    spirit.points = @min(spirit.points + constants.SPIRIT_PER_HIT, constants.SPIRIT_MAX);
 
     // Every block hit speeds the ball up a notch, up to the maximum. Scaling
     // the whole vector keeps its direction.
