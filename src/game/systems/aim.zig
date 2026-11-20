@@ -59,7 +59,10 @@ fn aimRender(_: *Sys, scn: *Scene) void {
 
 fn computeAim(scn: *Scene) ?Aim {
     var player_it = scn.entities.query(.{ comps.Player, comps.Position });
-    const player_pos = scn.entities.getComponent(player_it.next() orelse return null, comps.Position).?;
+    const player_id = player_it.next() orelse return null;
+    // No aiming (nor firing) while the player is still walking to its spot.
+    if (scn.entities.getComponent(player_id, comps.Player).?.walking) return null;
+    const player_pos = scn.entities.getComponent(player_id, comps.Position).?;
     const origin = field.launchPoint(player_pos.x);
 
     // Angle above the horizontal, clamped so the shot always goes up.

@@ -45,8 +45,15 @@ pub const Sphere = struct { kind: SphereKind = .NORMAL, hits: u32 = 0 };
 
 /// `Position` is the centre of the player's cube; only x ever changes.
 /// `next_x` is where the first ball of the current volley landed, valid
-/// while `landed` is set; the player moves there once the volley is over.
-pub const Player = struct { landed: bool = false, next_x: f32 = 0 };
+/// while `landed` is set; once the volley is over the player walks there,
+/// from `walk_from`, `walk_time` seconds into the walk while `walking`.
+pub const Player = struct {
+    landed: bool = false,
+    next_x: f32 = 0,
+    walking: bool = false,
+    walk_from: f32 = 0,
+    walk_time: f32 = 0,
+};
 
 // ===================
 // SINGLETONS, all set on a single "game" entity.
