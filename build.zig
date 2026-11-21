@@ -85,6 +85,17 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addIncludePath(rlimgui.path("."));
 
     // ========================
+    // == ASSETS
+    // ========================
+
+    // The UI font is embedded in the binary (`@embedFile("ui_font")` in
+    // `src/game/ui.zig`), so the game doesn't depend on the working directory.
+    // Swap the file here to try another Fredoka weight/width.
+    exe.root_module.addAnonymousImport("ui_font", .{
+        .root_source_file = b.path("assets/font/static/Fredoka-SemiBold.ttf"),
+    });
+
+    // ========================
     // == INSTALL STEP
     // ========================
 

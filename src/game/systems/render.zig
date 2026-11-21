@@ -5,6 +5,7 @@ const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
 const spheres = @import("../spheres.zig");
+const ui = @import("../ui.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -41,19 +42,12 @@ fn drawStage() void {
     }
 }
 
-fn gameRender(_: *Sys, scn: *Scene) void {
-    drawStage();
-
-    // Field, plus the line a block must not cross.
-    rl.drawRectangleRec(field.rect, rl.fade(.black, 0.45));
-    const danger_y = constants.FIELD_TOP + @as(f32, @floatFromInt(constants.DANGER_ROW)) * constants.CELL_SIZE;
-    rl.drawLineEx(
-        .{ .x = constants.FIELD_LEFT, .y = danger_y },
-        .{ .x = constants.FIELD_RIGHT, .y = danger_y },
-        2.0,
-        rl.fade(.red, 0.5),
-    );
-    rl.drawRectangleLinesEx(field.rect, 2.0, .light_gray);
+/// Clipped to the field: while the blocks descend, the new row slides in
+/// from behind its top edge instead of over the wave counter above it.
+fn drawBlocks(scn: *Scene) void {
+    const area = field.rect;
+    rl.beginScissorMode(@intFromFloat(area.x), @intFromFloat(area.y), @intFromFloat(area.width), @intFromFloat(area.height));
+    defer rl.endScissorMode();
 
     var block_it = scn.entities.query(.{ comps.Block, comps.Position, comps.Size, comps.Health });
     while (block_it.next()) |id| {
@@ -73,15 +67,25 @@ fn gameRender(_: *Sys, scn: *Scene) void {
 
         var buf: [16]u8 = undefined;
         const text = std.fmt.bufPrintZ(&buf, "{d}", .{health.current}) catch "?";
-        const text_w: f32 = @floatFromInt(rl.measureText(text, HEALTH_FONT_SIZE));
-        rl.drawText(
-            text,
-            @intFromFloat(pos.x + (size.width - text_w) / 2.0),
-            @intFromFloat(pos.y + (size.height - @as(f32, @floatFromInt(HEALTH_FONT_SIZE))) / 2.0),
-            HEALTH_FONT_SIZE,
-            .black,
-        );
+        ui.textInRect(text, rect, HEALTH_FONT_SIZE, .black);
     }
+}
+
+fn gameRender(_: *Sys, scn: *Scene) void {
+    drawStage();
+
+    // Field, plus the line a block must not cross.
+    rl.drawRectangleRec(field.rect, rl.fade(.black, 0.45));
+    const danger_y = constants.FIELD_TOP + @as(f32, @floatFromInt(constants.DANGER_ROW)) * constants.CELL_SIZE;
+    rl.drawLineEx(
+        .{ .x = constants.FIELD_LEFT, .y = danger_y },
+        .{ .x = constants.FIELD_RIGHT, .y = danger_y },
+        2.0,
+        rl.fade(.red, 0.5),
+    );
+    rl.drawRectangleLinesEx(field.rect, 2.0, .light_gray);
+
+    drawBlocks(scn);
 
     var ball_it = scn.entities.query(.{ comps.Ball, comps.Position, comps.Circle });
     while (ball_it.next()) |id| {

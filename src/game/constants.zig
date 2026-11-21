@@ -156,6 +156,14 @@ pub const PLAYER_SIZE: f32 = 28;
 /// Seconds the player takes to walk (easing in and out) to where the
 /// volley's first ball landed. No aiming until the walk is over.
 pub const PLAYER_WALK_TIME: f32 = 1;
+/// Seconds the blocks take to slide one row down at the end of a turn
+/// (same easing as the walk, and starting on the same frame). Matching
+/// the walk keeps both moving in lockstep. No aiming until it's over.
+pub const BLOCK_DESCENT_TIME: f32 = PLAYER_WALK_TIME;
+
+comptime {
+    if (BLOCK_DESCENT_TIME <= 0) @compileError("BLOCK_DESCENT_TIME must be positive");
+}
 /// Shallowest shot allowed, in radians above the horizontal. Bounces only
 /// ever flip a velocity axis, so this also bounds how long a ball can stay up.
 pub const AIM_MIN_ANGLE: f32 = 0.14;

@@ -3,6 +3,7 @@ const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
+const ease = @import("../ease.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -57,13 +58,6 @@ fn playerUpdate(_: *Sys, scn: *Scene, dt: f32) void {
 
     player.walk_time += dt;
     const t = @min(player.walk_time / constants.PLAYER_WALK_TIME, 1.0);
-    pos.x = player.walk_from + (player.next_x - player.walk_from) * easeInOut(t);
+    pos.x = player.walk_from + (player.next_x - player.walk_from) * ease.inOutCubic(t);
     if (t >= 1.0) player.walking = false;
-}
-
-/// Cubic ease-in-out: starts slow, speeds up, slows down into `t` = 1.
-fn easeInOut(t: f32) f32 {
-    if (t < 0.5) return 4 * t * t * t;
-    const u = -2 * t + 2;
-    return 1 - u * u * u / 2;
 }

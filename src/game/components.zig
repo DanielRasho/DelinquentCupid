@@ -18,8 +18,8 @@ pub const Circle = struct { radius: f32 };
 pub const Block = struct {};
 /// Where a block sits on the grid: (`col`, `row`) is its top-left cell and
 /// it covers `cols` x `rows` cells (2 x 2 for a mini boss). `Position` and
-/// `Size` are derived from it, so a future descent animation can ease
-/// `Position` toward the cell.
+/// `Size` are derived from it; during the end-of-turn descent the cell has
+/// already moved and `Position` eases toward it (see `Descent`).
 pub const GridCell = struct { col: u8, row: u8, cols: u8 = 1, rows: u8 = 1 };
 /// A block at `current == 0` is dead: balls ignore it and the block system
 /// removes it (and pays out) on its next update.
@@ -64,7 +64,8 @@ pub const Phase = enum {
     AIMING,
     /// Balls are being launched and/or still flying.
     FIRING,
-    /// Every ball came back: blocks descend and a new row spawns.
+    /// Every ball came back: blocks slide one row down and a new row
+    /// slides in on top, while the player walks to its next spot.
     ADVANCING,
     /// A tarot card was just dealt; waits for the player to dismiss it.
     TAROT,
@@ -74,6 +75,11 @@ pub const Phase = enum {
     WON,
 };
 pub const Turn = struct { phase: Phase, wave: u32 };
+/// The descent of the `ADVANCING` phase. Once `started`, every block's
+/// `GridCell` is already one row down (and the new row spawned); `time`
+/// seconds in, `Position` is still easing there over `BLOCK_DESCENT_TIME`.
+/// `next` is the phase the turn goes to once it's over.
+pub const Descent = struct { started: bool = false, time: f32 = 0, next: Phase = .AIMING };
 /// The volley being fired: unit direction, the spheres still to launch (a
 /// copy of `BallStock` taken on the click), and the time left until the
 /// next one leaves.

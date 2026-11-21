@@ -18,6 +18,7 @@ fn gameSetup(_: *Sys, scn: *Scene) void {
 fn spawnGame(scn: *Scene) !void {
     const id = try scn.entities.new();
     try scn.entities.setComponent(id, comps.Turn{ .phase = .AIMING, .wave = 1 });
+    try scn.entities.setComponent(id, comps.Descent{});
     try scn.entities.setComponent(id, comps.Volley{});
     try scn.entities.setComponent(id, comps.BallStock{ .normal = constants.STARTING_BALLS });
     try scn.entities.setComponent(id, comps.LovePoints{});

@@ -29,8 +29,7 @@ fn hudRender(_: *Sys, scn: *Scene) void {
     const combo = scn.entities.getComponent(game_id, comps.Combo).?.hits;
     if (combo > 0) {
         const label = ui.format(&buf, "{d} combo", .{combo});
-        const width: f32 = @floatFromInt(rl.measureText(label, 24));
-        ui.text(label, constants.FIELD_RIGHT - width, WAVE_Y + 6, 24, .gold);
+        ui.text(label, constants.FIELD_RIGHT - ui.measure(label, 24), WAVE_Y + 6, 24, .gold);
     }
 
     const cards = ui.format(&buf, "Strength x{d}    Lovers x{d}    Tower x{d}", .{ upgrades.strength, upgrades.lovers, upgrades.tower });

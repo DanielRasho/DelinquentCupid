@@ -9,6 +9,7 @@ const ecs = @import("ecs");
 const Game = ecs.Game;
 const DebugTool = @import("debug/DebugTool.zig").DebugTool;
 const constants = @import("game/constants.zig");
+const ui = @import("game/ui.zig");
 
 // SYSTEMS
 const game_system = @import("game/systems/game.zig").game_system;
@@ -86,6 +87,8 @@ pub fn main() !void {
     rl.initWindow(WINDOW_W, WINDOW_H, "Delinquent Cupid");
     defer rl.closeWindow();
     rl.setTargetFPS(60);
+    try ui.loadFont();
+    defer ui.unloadFont();
     // IMGUI
     c.rlImGuiSetup(true);
     defer c.rlImGuiShutdown();
@@ -131,4 +134,5 @@ pub fn main() !void {
 // `zig build test` only collects tests from files a test block references.
 test {
     _ = @import("game/spheres.zig");
+    _ = @import("game/ease.zig");
 }

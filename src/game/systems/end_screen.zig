@@ -3,6 +3,7 @@ const rl = @import("raylib");
 const zgui = @import("zgui");
 const ecs = @import("ecs");
 const constants = @import("../constants.zig");
+const ui = @import("../ui.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -50,7 +51,5 @@ fn EndScreen(comptime title: [:0]const u8, comptime title_color: rl.Color) Sys {
 }
 
 fn drawCentered(text: [:0]const u8, font_size: i32, y: f32, color: rl.Color) void {
-    const screen_w: i32 = @intFromFloat(constants.SCREEN_W);
-    const x = @divTrunc(screen_w - rl.measureText(text, font_size), 2);
-    rl.drawText(text, x, @intFromFloat(y), font_size, color);
+    ui.textCentered(text, constants.SCREEN_W / 2.0, y, font_size, color);
 }
