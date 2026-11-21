@@ -4,6 +4,7 @@ const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
+const ease = @import("../ease.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -32,14 +33,17 @@ fn blockDestroy(_: *Sys, scn: *Scene) void {
     for (blocks.items) |id| scn.entities.remove(id);
 }
 
-fn blockUpdate(_: *Sys, scn: *Scene, _: f32) void {
+fn blockUpdate(_: *Sys, scn: *Scene, dt: f32) void {
     var game_it = scn.entities.query(.{comps.Turn});
     const game_id = game_it.next().?;
 
     reapDead(scn, game_id) catch |err| std.debug.panic("block update failed: {}", .{err});
 
     if (scn.entities.getComponent(game_id, comps.Turn).?.phase != .ADVANCING) return;
-    advance(scn, game_id) catch |err| std.debug.panic("block advance failed: {}", .{err});
+    if (!scn.entities.getComponent(game_id, comps.Descent).?.started) {
+        advance(scn, game_id) catch |err| std.debug.panic("block advance failed: {}", .{err});
+    }
+    descend(scn, game_id, dt);
 }
 
 /// Removes the blocks the balls brought down to zero and pays for each.
@@ -61,36 +65,55 @@ fn reapDead(scn: *Scene, game_id: EntityID) !void {
     scn.entities.getComponent(game_id, comps.LovePoints).?.points += reward * (2 + lovers) / 2;
 }
 
-/// End of a turn: every block drops one row, then either the run is lost or
-/// the next wave's row comes in at the top (with a tarot card every few waves).
+/// Start of the end-of-turn descent: every block drops one row on the grid
+/// (`descend` then slides them there), and the turn's outcome is decided
+/// now: the run is lost, won, or the next wave's row comes in at the top
+/// (with a tarot card every few waves).
 fn advance(scn: *Scene, game_id: EntityID) !void {
     var reached_danger = false;
 
-    var it = scn.entities.query(.{ comps.Block, comps.GridCell, comps.Position });
+    var it = scn.entities.query(.{ comps.Block, comps.GridCell });
     while (it.next()) |id| {
         const cell = scn.entities.getComponent(id, comps.GridCell).?;
         cell.row += 1;
         if (cell.row + cell.rows - 1 >= constants.DANGER_ROW) reached_danger = true;
-
-        const rect = field.blockRect(cell.col, cell.row, cell.cols, cell.rows);
-        scn.entities.getComponent(id, comps.Position).?.* = .{ .x = rect.x, .y = rect.y };
     }
 
     const turn = scn.entities.getComponent(game_id, comps.Turn).?;
-    if (reached_danger) {
-        turn.phase = .LOST;
-        return;
-    }
-    turn.wave += 1;
-    if (turn.wave >= constants.WIN_WAVE) {
-        turn.phase = .WON;
-        return;
-    }
-    turn.phase = if (turn.wave % constants.TAROT_EVERY == 0) .TAROT else .AIMING;
+    const next: comps.Phase = outcome: {
+        if (reached_danger) break :outcome .LOST;
+        turn.wave += 1;
+        if (turn.wave >= constants.WIN_WAVE) break :outcome .WON;
+        break :outcome if (turn.wave % constants.TAROT_EVERY == 0) .TAROT else .AIMING;
+    };
+    scn.entities.getComponent(game_id, comps.Descent).?.* = .{ .started = true, .next = next };
+    if (next == .LOST or next == .WON) return;
 
     // Spawning invalidates `turn`, so it's the last thing done here.
+    const wave = turn.wave;
     const tower = scn.entities.getComponent(game_id, comps.Upgrades).?.tower;
-    try spawnRow(scn, turn.wave, tower);
+    try spawnRow(scn, wave, tower);
+}
+
+/// Eases every block from one row above its cell down into it (the new row
+/// slides in from above the field), in step with the player's walk. Once
+/// it's over the turn moves on to the phase `advance` decided.
+fn descend(scn: *Scene, game_id: EntityID, dt: f32) void {
+    const descent = scn.entities.getComponent(game_id, comps.Descent).?;
+    descent.time += dt;
+    const t = @min(descent.time / constants.BLOCK_DESCENT_TIME, 1.0);
+    const lag = constants.CELL_SIZE * (1 - ease.inOutCubic(t));
+
+    var it = scn.entities.query(.{ comps.Block, comps.GridCell, comps.Position });
+    while (it.next()) |id| {
+        const cell = scn.entities.getComponent(id, comps.GridCell).?;
+        const rect = field.blockRect(cell.col, cell.row, cell.cols, cell.rows);
+        scn.entities.getComponent(id, comps.Position).?.* = .{ .x = rect.x, .y = rect.y - lag };
+    }
+
+    if (t < 1.0) return;
+    scn.entities.getComponent(game_id, comps.Turn).?.phase = descent.next;
+    descent.* = .{};
 }
 
 /// Health of a regular block spawned on `wave`: one step harder every
