@@ -10,6 +10,7 @@ const constants = @import("constants.zig");
 /// One per embedded PNG. Each name must match a declaration of
 /// `assets/sprites/files.zig` (a typo is a compile error in `load`).
 pub const Sprite = enum {
+    logo,
     mika_neutral,
     mika_scared,
     mika_happy,

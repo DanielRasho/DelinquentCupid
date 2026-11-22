@@ -6,6 +6,9 @@
 //! which decodes these into textures. Adding a sprite = one line here + one
 //! enum field there.
 
+// The game logo (260 x 120): main menu, victory and lose screens.
+pub const logo = @embedFile("Logo.png");
+
 // Mika, one portrait per `Mood`.
 pub const mika_neutral = @embedFile("mika/neutral.png");
 pub const mika_scared = @embedFile("mika/Scared.png");

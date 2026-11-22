@@ -3,6 +3,7 @@ const rl = @import("raylib");
 const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const ui = @import("../ui.zig");
+const sprites = @import("../sprites.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -14,7 +15,8 @@ const Game = ecs.Game;
 pub const menu_system = Sys{ .update = menuUpdate, .render = menuRender, .destroy = menuDestroy };
 
 const BACKGROUND = rl.Rectangle{ .x = 0, .y = 0, .width = constants.SCREEN_W, .height = constants.SCREEN_H };
-/// Shared with the victory scene, which ends on the same logo.
+/// Where the logo goes (its 260 x 120 art at `PIXEL_SCALE`). Shared with the
+/// victory and lose screens, so it sits in the same spot on all three.
 pub const LOGO = rl.Rectangle{ .x = (constants.SCREEN_W - 520) / 2.0, .y = 90, .width = 520, .height = 240 };
 pub const PROMPT_Y: f32 = constants.SCREEN_H - 120;
 
@@ -37,6 +39,6 @@ fn menuDestroy(_: *Sys, scn: *Scene) void {
 fn menuRender(_: *Sys, _: *Scene) void {
     ui.placeholder(BACKGROUND, "", rl.Color.init(70, 60, 90, 255));
     ui.text("BACKGROUND IMAGE", 16, constants.SCREEN_H - 36, 20, rl.fade(.ray_white, 0.5));
-    ui.placeholder(LOGO, "GAME LOGO", .pink);
+    sprites.drawCentered(.logo, LOGO);
     if (ui.blink()) ui.textCentered("Press SPACE to Start", constants.SCREEN_W / 2.0, PROMPT_Y, 32, .ray_white);
 }
