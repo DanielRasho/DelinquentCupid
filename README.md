@@ -11,7 +11,7 @@ Your mouse 🐁
 - Raylib `6.0.0`
 - rlimgui `commit dc7f97679a024eee8f5f009e77cc311748200415`
 
-[**▶️ Watch the DEMO**](https://youtu.be/z-iqwpSnDVA)
+[**▶️ Watch the DEMO**](https://youtu.be/lzrcK2tKhqg)
 
 ## How I got it to work...
 At the time of writing this, zig is still in beta, so everything is subject to change. Inspired by the work of schmee in [zig-raylib-imgui-template](https://github.com/schmee/zig-raylib-imgui-template) for zig 0.13, I did the same setup for zig 0.16.0. 
