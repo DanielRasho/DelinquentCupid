@@ -10,6 +10,10 @@ pub const SCENE_LOSE = "lose";
 /// Reaching this wave wins the run.
 pub const WIN_WAVE: u32 = 100;
 
+/// Screen pixels per pixel of art. Sprites are drawn at this whole-number
+/// scale so the pixel art stays crisp.
+pub const PIXEL_SCALE: f32 = 2;
+
 // ===================
 // LAYOUT: [ left column | stage | right column ]
 // ===================

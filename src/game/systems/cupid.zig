@@ -4,6 +4,7 @@ const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const ui = @import("../ui.zig");
+const sprites = @import("../sprites.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -140,15 +141,15 @@ fn cupidRender(_: *Sys, scn: *Scene) void {
     const open = scn.entities.getComponent(game_id, comps.Turn).?.phase == .AIMING;
     const points = scn.entities.getComponent(game_id, comps.Spirit).?.points;
 
-    // The fuller the meter, the angrier he looks.
+    // The fuller the meter, the more worked up he looks: one portrait per third.
     const third = constants.SPIRIT_MAX / 3;
-    if (points < third) {
-        ui.placeholder(PORTRAIT, "CUPID: chill", .sky_blue);
-    } else if (points < 2 * third) {
-        ui.placeholder(PORTRAIT, "CUPID: fired up", .orange);
-    } else {
-        ui.placeholder(PORTRAIT, "CUPID: furious", .red);
-    }
+    const portrait: sprites.Sprite = if (points < third)
+        .cupid_chill
+    else if (points < 2 * third)
+        .cupid_motivated
+    else
+        .cupid_fired_up;
+    sprites.drawCentered(portrait, PORTRAIT);
 
     const filled: f32 = @as(f32, @floatFromInt(points)) / @as(f32, @floatFromInt(constants.SPIRIT_MAX));
     rl.drawRectangleRec(METER, rl.fade(.black, 0.4));

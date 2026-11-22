@@ -10,6 +10,7 @@ const Game = ecs.Game;
 const DebugTool = @import("debug/DebugTool.zig").DebugTool;
 const constants = @import("game/constants.zig");
 const ui = @import("game/ui.zig");
+const sprites = @import("game/sprites.zig");
 
 // SYSTEMS
 const game_system = @import("game/systems/game.zig").game_system;
@@ -89,6 +90,8 @@ pub fn main() !void {
     rl.setTargetFPS(60);
     try ui.loadFont();
     defer ui.unloadFont();
+    try sprites.load();
+    defer sprites.unload();
     // IMGUI
     c.rlImGuiSetup(true);
     defer c.rlImGuiShutdown();

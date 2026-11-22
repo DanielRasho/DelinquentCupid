@@ -3,14 +3,14 @@ const rl = @import("raylib");
 const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
-const ui = @import("../ui.zig");
+const sprites = @import("../sprites.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
 
 // ===================
-// GIRL: the portrait at the top of the left column. Its mood follows the
-// field; for now a mood is just a colour and a label.
+// GIRL: Mika's portrait at the top of the left column. Its mood follows the
+// field and the volley's combo; each mood has its own portrait.
 // ===================
 pub const girl_system = Sys{ .setup = girlSetup, .update = girlUpdate, .render = girlRender, .destroy = girlDestroy };
 
@@ -72,11 +72,12 @@ fn girlUpdate(_: *Sys, scn: *Scene, dt: f32) void {
 fn girlRender(_: *Sys, scn: *Scene) void {
     var it = scn.entities.query(.{comps.Girl});
     const girl = scn.entities.getComponent(it.next() orelse return, comps.Girl).?;
-    switch (girl.mood) {
-        .CALM => ui.placeholder(PORTRAIT, "GIRL: calm", .pink),
-        .SCARED => ui.placeholder(PORTRAIT, "GIRL: scared", .violet),
-        .HAPPY => ui.placeholder(PORTRAIT, "GIRL: happy", .gold),
-        .SUPER_HAPPY => ui.placeholder(PORTRAIT, "GIRL: super happy", .orange),
-        .SUPER_SUPER_HAPPY => ui.placeholder(PORTRAIT, "GIRL: super super happy", .magenta),
-    }
+    const portrait: sprites.Sprite = switch (girl.mood) {
+        .CALM => .mika_neutral,
+        .SCARED => .mika_scared,
+        .HAPPY => .mika_happy,
+        .SUPER_HAPPY => .mika_super_happy,
+        .SUPER_SUPER_HAPPY => .mika_ecstatic,
+    };
+    sprites.drawCentered(portrait, PORTRAIT);
 }

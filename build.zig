@@ -95,6 +95,15 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("assets/font/static/Fredoka-SemiBold.ttf"),
     });
 
+    // Sprite PNGs are embedded too. `@embedFile` can't leave its module's
+    // directory, so they come through a module rooted next to the art, which
+    // `src/game/sprites.zig` decodes into textures.
+    exe.root_module.addImport("sprite_files", b.createModule(.{
+        .root_source_file = b.path("assets/sprites/files.zig"),
+        .target = target,
+        .optimize = optimize,
+    }));
+
     // ========================
     // == INSTALL STEP
     // ========================
