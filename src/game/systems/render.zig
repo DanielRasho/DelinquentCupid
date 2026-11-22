@@ -15,6 +15,15 @@ const Scene = ecs.scene.Scene;
 pub const render_system = Sys{ .render = gameRender };
 
 const HEALTH_FONT_SIZE: i32 = 24;
+/// The faces only leave their chin free for the health number: it goes in
+/// the bottom of the block from this fraction of its height, at this size.
+const CHIN_TOP: f32 = 0.74;
+const CHIN_FONT_SIZE: i32 = 16;
+
+const PLAYER_ANIM = sprites.Animation{
+    .frames = &.{ .player_1, .player_2, .player_3, .player_4 },
+    .fps = constants.PLAYER_ANIM_FPS,
+};
 
 // ===================
 // RENDER: the greybox world (field, blocks, balls, player).
@@ -65,24 +74,39 @@ fn drawBlocks(scn: *Scene) void {
 
     var block_it = scn.entities.query(.{ comps.Block, comps.Position, comps.Size, comps.Health });
     while (block_it.next()) |id| {
+        const block = scn.entities.getComponent(id, comps.Block).?;
         const pos = scn.entities.getComponent(id, comps.Position).?;
         const size = scn.entities.getComponent(id, comps.Size).?;
         const health = scn.entities.getComponent(id, comps.Health).?;
         if (health.current == 0) continue;
 
-        // The more damaged a block is, the darker it gets. Gold blocks are yellow.
-        const left: f32 = @as(f32, @floatFromInt(health.current)) / @as(f32, @floatFromInt(@max(health.max, 1)));
-        const shade: u8 = @intFromFloat(90.0 + 110.0 * std.math.clamp(left, 0.0, 1.0));
-        const is_gold = scn.entities.getComponent(id, comps.Gold) != null;
-        const color = if (is_gold) rl.Color.init(shade + 55, shade + 40, 0, 255) else rl.Color.init(shade, shade, shade, 255);
+        // The art is a whole cell (or 2 x 2 for the boss): it covers the
+        // `BLOCK_INSET` margin, so neighbouring blocks touch.
         const rect = rl.Rectangle{ .x = pos.x, .y = pos.y, .width = size.width, .height = size.height };
-        rl.drawRectangleRec(rect, color);
-        rl.drawRectangleLinesEx(rect, 2.0, .black);
+        sprites.drawCentered(block.art, rect);
 
         var buf: [16]u8 = undefined;
         const text = std.fmt.bufPrintZ(&buf, "{d}", .{health.current}) catch "?";
-        ui.textInRect(text, rect, HEALTH_FONT_SIZE, .black);
+        const label = healthLabel(block.art, rect);
+        ui.textInRect(text, label.area, label.size, .black);
     }
+}
+
+/// Where a block's health number goes: wherever its art leaves room. The
+/// gold and boss art have an empty middle, the faces only their chin.
+fn healthLabel(art: sprites.Sprite, rect: rl.Rectangle) struct { area: rl.Rectangle, size: i32 } {
+    return switch (art) {
+        .block_gold, .block_boss => .{ .area = rect, .size = HEALTH_FONT_SIZE },
+        else => .{
+            .area = .{
+                .x = rect.x,
+                .y = rect.y + rect.height * CHIN_TOP,
+                .width = rect.width,
+                .height = rect.height * (1.0 - CHIN_TOP),
+            },
+            .size = CHIN_FONT_SIZE,
+        },
+    };
 }
 
 fn gameRender(_: *Sys, scn: *Scene) void {
@@ -113,11 +137,12 @@ fn gameRender(_: *Sys, scn: *Scene) void {
 
     var player_it = scn.entities.query(.{ comps.Player, comps.Position });
     while (player_it.next()) |id| {
+        const player = scn.entities.getComponent(id, comps.Player).?;
         const pos = scn.entities.getComponent(id, comps.Position).?;
         const half = constants.PLAYER_SIZE / 2.0;
-        rl.drawRectangleRec(
+        sprites.drawCentered(
+            PLAYER_ANIM.frameAt(player.anim_time),
             .{ .x = pos.x - half, .y = pos.y - half, .width = constants.PLAYER_SIZE, .height = constants.PLAYER_SIZE },
-            .sky_blue,
         );
     }
 }

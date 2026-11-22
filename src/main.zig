@@ -143,4 +143,5 @@ test {
     _ = @import("game/spheres.zig");
     _ = @import("game/ease.zig");
     _ = @import("game/terrain.zig");
+    _ = @import("game/sprites.zig");
 }

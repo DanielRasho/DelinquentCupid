@@ -33,14 +33,17 @@ fn playerDestroy(_: *Sys, scn: *Scene) void {
 /// easing in and out over `PLAYER_WALK_TIME`: that's where the next turn is
 /// fired from (the aim system waits for the walk to end).
 fn playerUpdate(_: *Sys, scn: *Scene, dt: f32) void {
-    var game_it = scn.entities.query(.{comps.Turn});
-    const turn = scn.entities.getComponent(game_it.next().?, comps.Turn).?;
-    if (turn.phase == .FIRING) return;
-
     var it = scn.entities.query(.{ comps.Player, comps.Position });
     const id = it.next() orelse return;
     const player = scn.entities.getComponent(id, comps.Player).?;
     const pos = scn.entities.getComponent(id, comps.Position).?;
+
+    // The animation loops all the time, whatever the phase.
+    player.anim_time += dt;
+
+    var game_it = scn.entities.query(.{comps.Turn});
+    const turn = scn.entities.getComponent(game_it.next().?, comps.Turn).?;
+    if (turn.phase == .FIRING) return;
 
     if (player.landed) {
         player.landed = false;

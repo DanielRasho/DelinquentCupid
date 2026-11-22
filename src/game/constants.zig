@@ -178,7 +178,10 @@ comptime {
 // ===================
 // PLAYER / AIM
 // ===================
-pub const PLAYER_SIZE: f32 = 28;
+/// Side of the player's sprite on screen: 32 px of art at `PIXEL_SCALE`.
+pub const PLAYER_SIZE: f32 = 32 * PIXEL_SCALE;
+/// Frames per second of the player's looping animation.
+pub const PLAYER_ANIM_FPS: f32 = 4;
 /// Seconds the player takes to walk (easing in and out) to where the
 /// volley's first ball landed. No aiming until the walk is over.
 pub const PLAYER_WALK_TIME: f32 = 1;

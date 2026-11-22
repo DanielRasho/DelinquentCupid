@@ -1,6 +1,7 @@
 const std = @import("std");
 const constants = @import("constants.zig");
 const ease = @import("ease.zig");
+const sprites = @import("sprites.zig");
 const terrain = @import("terrain.zig");
 
 // ===================
@@ -17,7 +18,8 @@ pub const Circle = struct { radius: f32 };
 // BLOCKS
 // ===================
 
-pub const Block = struct {};
+/// `art` is picked once, at spawn (see `block.zig`'s `spawnBlock`).
+pub const Block = struct { art: sprites.Sprite };
 /// Where a block sits on the grid: (`col`, `row`) is its top-left cell and
 /// it covers `cols` x `rows` cells (2 x 2 for a mini boss). `Position` and
 /// `Size` are derived from it; during the end-of-turn descent the cell has
@@ -45,16 +47,18 @@ pub const SphereKind = enum { NORMAL, FIRE, BOMB, ROW_LASER, COLUMN_LASER, CROSS
 /// decides when its effect goes off again).
 pub const Sphere = struct { kind: SphereKind = .NORMAL, hits: u32 = 0 };
 
-/// `Position` is the centre of the player's cube; only x ever changes.
+/// `Position` is the centre of the player's sprite; only x ever changes.
 /// `next_x` is where the first ball of the current volley landed, valid
 /// while `landed` is set; once the volley is over the player walks there,
 /// from `walk_from`, `walk_time` seconds into the walk while `walking`.
+/// `anim_time` is how long its animation has been playing, in seconds.
 pub const Player = struct {
     landed: bool = false,
     next_x: f32 = 0,
     walking: bool = false,
     walk_from: f32 = 0,
     walk_time: f32 = 0,
+    anim_time: f32 = 0,
 };
 
 // ===================
