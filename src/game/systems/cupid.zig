@@ -5,6 +5,7 @@ const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const ui = @import("../ui.zig");
 const sprites = @import("../sprites.zig");
+const sakura = @import("../sakura.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -29,6 +30,8 @@ const W: f32 = constants.COLUMN_CONTENT_W;
 const PORTRAIT = rl.Rectangle{ .x = X, .y = constants.PORTRAIT_Y, .width = W, .height = constants.PORTRAIT_H };
 const METER = rl.Rectangle{ .x = X, .y = constants.COLUMN_BODY_Y, .width = W, .height = 28 };
 const METER_LABEL_Y: f32 = METER.y + METER.height + 8;
+/// Gap between the meter's frame and its bar.
+const METER_INSET: f32 = 4;
 const BUTTONS_Y: f32 = METER_LABEL_Y + 36;
 const BUTTON_H: f32 = 52;
 const BUTTON_GAP: f32 = 12;
@@ -151,14 +154,20 @@ fn cupidRender(_: *Sys, scn: *Scene) void {
         .cupid_fired_up;
     sprites.drawCentered(portrait, PORTRAIT);
 
+    // A rose bar with a soft shine, inside a rounded sakura frame.
     const filled: f32 = @as(f32, @floatFromInt(points)) / @as(f32, @floatFromInt(constants.SPIRIT_MAX));
-    rl.drawRectangleRec(METER, rl.fade(.black, 0.4));
-    rl.drawRectangleRec(.{ .x = METER.x, .y = METER.y, .width = METER.width * filled, .height = METER.height }, .lime);
-    rl.drawRectangleLinesEx(METER, 2.0, .light_gray);
+    ui.panel(METER, rl.fade(sakura.night, 0.85), sakura.blossom);
+    if (filled > 0) {
+        const inner_w = (METER.width - 2 * METER_INSET) * @min(filled, 1);
+        const bar = rl.Rectangle{ .x = METER.x + METER_INSET, .y = METER.y + METER_INSET, .width = inner_w, .height = METER.height - 2 * METER_INSET };
+        rl.drawRectangleRounded(bar, 0.6, 8, sakura.blossom_deep);
+        const shine = rl.Rectangle{ .x = bar.x + 2, .y = bar.y + 2, .width = @max(0, bar.width - 4), .height = bar.height * 0.35 };
+        rl.drawRectangleRounded(shine, 1.0, 8, rl.fade(sakura.petal_white, 0.35));
+    }
 
     var buf: [64]u8 = undefined;
     const label = ui.format(&buf, "Spirit Meter  {d}/{d}", .{ points, constants.SPIRIT_MAX });
-    ui.textCentered(label, X + W / 2.0, METER_LABEL_Y, 20, .ray_white);
+    ui.textCentered(label, X + W / 2.0, METER_LABEL_Y, 20, sakura.petal_white);
 
     for (ABILITIES, 0..) |ability, i| {
         const text = ui.format(&buf, "{s} ({d})", .{ ability.name, ability.cost });

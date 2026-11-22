@@ -3,6 +3,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 const zgui = @import("zgui");
+const sakura = @import("sakura.zig");
 
 /// Fredoka, embedded at build time (see the `ui_font` import in build.zig).
 const FONT_DATA = @embedFile("ui_font");
@@ -66,13 +67,29 @@ pub fn placeholder(rect: rl.Rectangle, label: [:0]const u8, fill: rl.Color) void
     textInRect(label, rect, 20, .black);
 }
 
-/// Draws a button; it lights up under the cursor while `enabled`.
+/// Corner rounding of `panel`s and buttons (0-1 of their shorter side).
+const ROUNDNESS: f32 = 0.4;
+const ROUND_SEGMENTS: i32 = 8;
+
+/// A rounded box behind HUD widgets, with a 2 px `edge`.
+pub fn panel(rect: rl.Rectangle, fill: rl.Color, edge: rl.Color) void {
+    rl.drawRectangleRounded(rect, ROUNDNESS, ROUND_SEGMENTS, fill);
+    rl.drawRectangleRoundedLinesEx(rect, ROUNDNESS, ROUND_SEGMENTS, 2.0, edge);
+}
+
+/// Draws a sakura-pink button; it lights up under the cursor while
+/// `enabled`, and fades into the backdrop while it isn't.
 pub fn button(rect: rl.Rectangle, label: [:0]const u8, size: i32, enabled: bool) void {
     const hovered = enabled and rl.checkCollisionPointRec(rl.getMousePosition(), rect);
-    const fill: rl.Color = if (hovered) .light_gray else if (enabled) .gray else rl.fade(.gray, 0.3);
-    const ink: rl.Color = if (enabled) .black else .gray;
-    rl.drawRectangleRec(rect, fill);
-    rl.drawRectangleLinesEx(rect, 2.0, ink);
+    const fill: rl.Color = if (hovered) sakura.blossom_light else if (enabled) sakura.blossom else rl.fade(sakura.night, 0.7);
+    const edge: rl.Color = if (hovered) sakura.petal_white else if (enabled) sakura.blossom_deep else rl.fade(sakura.blossom, 0.35);
+    const ink: rl.Color = if (enabled) sakura.ink else rl.fade(sakura.blossom, 0.5);
+    panel(rect, fill, edge);
+    // A soft shine across the top half of a live button.
+    if (enabled) {
+        const shine = rl.Rectangle{ .x = rect.x + 6, .y = rect.y + 4, .width = rect.width - 12, .height = rect.height * 0.4 };
+        rl.drawRectangleRounded(shine, 1.0, ROUND_SEGMENTS, rl.fade(sakura.petal_white, 0.35));
+    }
     textInRect(label, rect, size, ink);
 }
 

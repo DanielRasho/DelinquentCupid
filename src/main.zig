@@ -25,6 +25,7 @@ const map_system = @import("game/systems/map.zig").map_system;
 const effects_system = @import("game/systems/effects.zig").effects_system;
 const tarot_system = @import("game/systems/tarot.zig").tarot_system;
 const render_system = @import("game/systems/render.zig").render_system;
+const backdrop_system = @import("game/systems/backdrop.zig").backdrop_system;
 const hud_system = @import("game/systems/hud.zig").hud_system;
 const menu_system = @import("game/systems/menu.zig").menu_system;
 const victory_system = @import("game/systems/victory.zig").victory_system;
@@ -48,10 +49,13 @@ fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     // the click that dismisses a card can't also fire or buy that frame; it
     // is also last to draw, over the field. `Map` scrolls the background on
     // the frame `Block` starts a descent, so it goes after `Block` (it draws
-    // nothing itself: `Render` draws the map, under the field).
+    // nothing itself: `Render` draws the map, under the field). `Backdrop`
+    // draws the side columns' sakura gradient, so it goes before the
+    // portraits, shop and cupid that draw over it.
     try scn.register("Game", game_system);
     try scn.register("Player", player_system);
     try scn.register("Render", render_system);
+    try scn.register("Backdrop", backdrop_system);
     try scn.register("Aim", aim_system);
     try scn.register("Shop", shop_system);
     try scn.register("Girl", girl_system);

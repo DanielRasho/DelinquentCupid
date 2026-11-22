@@ -5,6 +5,7 @@ const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const ui = @import("../ui.zig");
 const spheres = @import("../spheres.zig");
+const sakura = @import("../sakura.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -48,8 +49,8 @@ fn shopRender(_: *Sys, scn: *Scene) void {
     const stock = scn.entities.getComponent(game_id, comps.BallStock).?;
 
     var buf: [64]u8 = undefined;
-    ui.textCentered(ui.format(&buf, "{d}", .{points}), CENTER_X, POINTS_Y, 36, .ray_white);
-    ui.textCentered("Love Points", CENTER_X, LABEL_Y, 20, .ray_white);
+    ui.textCentered(ui.format(&buf, "{d}", .{points}), CENTER_X, POINTS_Y, 36, sakura.petal_white);
+    ui.textCentered("Love Points", CENTER_X, LABEL_Y, 20, sakura.blossom);
     ui.button(
         BUY_RECT,
         ui.format(&buf, "Get sphere ({d})", .{constants.SPHERE_COST}),
@@ -67,10 +68,10 @@ fn shopRender(_: *Sys, scn: *Scene) void {
         const center_x = constants.LEFT_COLUMN_X + (@as(f32, @floatFromInt(shown % SLOTS_PER_ROW)) + 0.5) * SLOT_CELL_W;
         const top = SLOTS_Y + @as(f32, @floatFromInt(shown / SLOTS_PER_ROW)) * SLOT_CELL_H;
         const slot = rl.Rectangle{ .x = center_x - SLOT_SIZE / 2.0, .y = top, .width = SLOT_SIZE, .height = SLOT_SIZE };
-        rl.drawRectangleLinesEx(slot, 2.0, .light_gray);
+        ui.panel(slot, rl.fade(sakura.night, 0.75), sakura.blossom);
         rl.drawCircleV(.{ .x = center_x, .y = top + SLOT_SIZE / 2.0 }, 16, kind_info.color);
-        ui.textCentered(kind_info.name, center_x, top + SLOT_SIZE + 6, 14, .light_gray);
-        ui.textCentered(ui.format(&buf, "{d}", .{count}), center_x, top + SLOT_SIZE + 24, 20, .ray_white);
+        ui.textCentered(kind_info.name, center_x, top + SLOT_SIZE + 6, 14, sakura.blossom_light);
+        ui.textCentered(ui.format(&buf, "{d}", .{count}), center_x, top + SLOT_SIZE + 24, 20, sakura.petal_white);
         shown += 1;
     }
 }

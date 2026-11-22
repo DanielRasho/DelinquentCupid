@@ -14,6 +14,12 @@ const Scene = ecs.scene.Scene;
 
 pub const render_system = Sys{ .render = gameRender };
 
+/// The field (where blocks sit and balls bounce): a caramel tint over the
+/// map, so the grass and soil still show through, in a deeper caramel frame.
+const FIELD_FILL = rl.Color.init(196, 128, 64, 255);
+const FIELD_FILL_OPACITY: f32 = 0.20;
+const FIELD_EDGE = rl.Color.init(142, 86, 40, 255);
+
 const HEALTH_FONT_SIZE: i32 = 24;
 /// The faces only leave their chin free for the health number: it goes in
 /// the bottom of the block from this fraction of its height, at this size.
@@ -113,7 +119,7 @@ fn gameRender(_: *Sys, scn: *Scene) void {
     drawStage(scn);
 
     // Field, plus the line a block must not cross.
-    rl.drawRectangleRec(field.rect, rl.fade(.black, 0.45));
+    rl.drawRectangleRec(field.rect, rl.fade(FIELD_FILL, FIELD_FILL_OPACITY));
     const danger_y = constants.FIELD_TOP + @as(f32, @floatFromInt(constants.DANGER_ROW)) * constants.CELL_SIZE;
     rl.drawLineEx(
         .{ .x = constants.FIELD_LEFT, .y = danger_y },
@@ -121,7 +127,7 @@ fn gameRender(_: *Sys, scn: *Scene) void {
         2.0,
         rl.fade(.red, 0.5),
     );
-    rl.drawRectangleLinesEx(field.rect, 2.0, .light_gray);
+    rl.drawRectangleLinesEx(field.rect, 2.0, FIELD_EDGE);
 
     drawBlocks(scn);
 
