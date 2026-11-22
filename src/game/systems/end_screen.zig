@@ -41,6 +41,7 @@ fn EndScreen(comptime title: [:0]const u8, comptime title_color: rl.Color) Sys {
             try scn.entities.setComponent(id, Game.SwitchRequest{ .to = constants.SCENE_GAME });
         }
         fn render(_: *Sys, _: *Scene) void {
+            menu.drawBackground();
             sprites.drawCentered(.logo, menu.LOGO);
             const hint_y = TITLE_Y + @as(f32, @floatFromInt(TITLE_FONT_SIZE)) + HINT_GAP;
             drawCentered(title, TITLE_FONT_SIZE, TITLE_Y, title_color);

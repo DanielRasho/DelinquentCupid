@@ -80,7 +80,7 @@ fn victoryRender(_: *Sys, scn: *Scene) void {
         return;
     }
 
-    ui.placeholder(FULL_SCREEN, "", rl.Color.init(70, 60, 90, 255));
+    menu.drawBackground();
     sprites.drawCentered(.logo, menu.LOGO);
     if (ui.blink()) {
         ui.textCentered("Press any key to go to the main menu", constants.SCREEN_W / 2.0, menu.PROMPT_Y, 28, .ray_white);
