@@ -17,16 +17,18 @@ pub const PIXEL_SCALE: f32 = 2;
 // ===================
 // LAYOUT: [ left column | stage | right column ]
 // ===================
-/// Side of a square tile of the stage's tileset. One block fills one tile.
-pub const TILE_SIZE: f32 = 72;
+/// Side of a tile in the tileset PNGs, in pixels of art.
+pub const TILE_ART_SIZE: f32 = 32;
+/// Side of a square tile of the stage's tileset on screen. One block fills one tile.
+pub const TILE_SIZE: f32 = TILE_ART_SIZE * PIXEL_SCALE;
 
 /// Full width of each side column. THE knob for how much room the stage
-/// gets: the stage is whatever the two columns leave free. The stage is a
-/// whole number of tiles wide when `SCREEN_W - 2 * COLUMN_W` is a multiple
-/// of `TILE_SIZE` (1500 - 2 * 318 = 864 = 12 tiles).
-pub const COLUMN_W: f32 = 318;
-/// Empty space between a column's edge and its widgets.
-pub const COLUMN_PADDING: f32 = 12;
+/// gets: the stage is whatever the two columns leave free, and must be a
+/// whole number of tiles wide (1500 - 2 * 302 = 896 = 14 tiles).
+pub const COLUMN_W: f32 = 302;
+/// Empty space between a column's edge and its widgets. 15 leaves exactly
+/// a portrait's width (136 px of art x2 = 272) between the paddings.
+pub const COLUMN_PADDING: f32 = 15;
 pub const COLUMN_CONTENT_W: f32 = COLUMN_W - 2 * COLUMN_PADDING;
 pub const LEFT_COLUMN_X: f32 = COLUMN_PADDING;
 pub const RIGHT_COLUMN_X: f32 = SCREEN_W - COLUMN_W + COLUMN_PADDING;
@@ -56,6 +58,26 @@ pub const FIELD_BOTTOM: f32 = FIELD_TOP + FIELD_H;
 
 comptime {
     if (STAGE_W < FIELD_W) @compileError("COLUMN_W leaves no room for the field: shrink it or widen SCREEN_W");
+    // The map's tiles cover the stage exactly and line up with the field's
+    // cells (they scroll down with the blocks, one row per turn).
+    if (@mod(STAGE_W, TILE_SIZE) != 0 or @mod(SCREEN_H, TILE_SIZE) != 0)
+        @compileError("the stage must be a whole number of tiles: adjust COLUMN_W or SCREEN_H");
+    if (@mod(FIELD_LEFT - STAGE_X, TILE_SIZE) != 0 or @mod(FIELD_TOP, TILE_SIZE) != 0)
+        @compileError("the field must sit on the stage's tile grid: make STAGE_W - FIELD_W an even number of tiles");
+}
+
+// ===================
+// MAP (the stage's background: a trail of soil between grass, see `terrain.zig`)
+// ===================
+pub const MAP_COLS: usize = @intFromFloat(STAGE_W / TILE_SIZE);
+pub const MAP_VISIBLE_ROWS: usize = @intFromFloat(SCREEN_H / TILE_SIZE);
+/// How many of the map's outermost columns, on each side, are always grass.
+pub const MAP_GRASS_BORDER_COLS: usize = 2;
+/// Chance (0-100) that any other cell of a new map row is a patch of grass.
+pub const MAP_GRASS_CHANCE: u32 = 20;
+
+comptime {
+    if (2 * MAP_GRASS_BORDER_COLS > MAP_COLS) @compileError("MAP_GRASS_BORDER_COLS doesn't fit the stage");
 }
 
 /// A block that descends into this row ends the run. It's the last row, so
@@ -171,7 +193,7 @@ comptime {
 /// Shallowest shot allowed, in radians above the horizontal. Bounces only
 /// ever flip a velocity axis, so this also bounds how long a ball can stay up.
 pub const AIM_MIN_ANGLE: f32 = 0.14;
-/// Longest the aim preview line gets, in pixels (one cell is `CELL_SIZE` = 72).
+/// Longest the aim preview line gets, in pixels (one cell is `CELL_SIZE` = 64).
 /// It still stops early at the first wall or block it touches.
 pub const AIM_RAY_MAX_LENGTH: f32 = 300;
 

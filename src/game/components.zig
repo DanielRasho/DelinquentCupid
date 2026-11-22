@@ -1,5 +1,7 @@
 const std = @import("std");
 const constants = @import("constants.zig");
+const ease = @import("ease.zig");
+const terrain = @import("terrain.zig");
 
 // ===================
 // SPATIAL
@@ -79,7 +81,20 @@ pub const Turn = struct { phase: Phase, wave: u32 };
 /// `GridCell` is already one row down (and the new row spawned); `time`
 /// seconds in, `Position` is still easing there over `BLOCK_DESCENT_TIME`.
 /// `next` is the phase the turn goes to once it's over.
-pub const Descent = struct { started: bool = false, time: f32 = 0, next: Phase = .AIMING };
+pub const Descent = struct {
+    started: bool = false,
+    time: f32 = 0,
+    next: Phase = .AIMING,
+
+    /// How far (in pixels) whatever descends is still drawn above where it's
+    /// going: a whole row when the descent starts, easing to 0. The blocks
+    /// and the map both slide by this, so they move as one.
+    pub fn lag(self: Descent) f32 {
+        if (!self.started) return 0;
+        const t = @min(self.time / constants.BLOCK_DESCENT_TIME, 1.0);
+        return constants.CELL_SIZE * (1 - ease.inOutCubic(t));
+    }
+};
 /// The volley being fired: unit direction, the spheres still to launch (a
 /// copy of `BallStock` taken on the click), and the time left until the
 /// next one leaves.
@@ -140,6 +155,15 @@ pub const Combo = struct { hits: u32 = 0 };
 /// A fading highlight over the cells a sphere's effect just struck. Its
 /// rectangle is the entity's `Position` + `Size`. Owned by `effects.zig`.
 pub const Flash = struct { kind: SphereKind, time_left: f32 };
+
+// ===================
+// MAP
+// ===================
+
+/// The stage's background map (rules in `terrain.zig`), owned by `map.zig`.
+/// `scrolled` is set once it has moved one row down for the descent in
+/// progress, which tells `render.zig` to slide it in step with the blocks.
+pub const Terrain = struct { cells: terrain.Map, scrolled: bool = false };
 
 // ===================
 // GIRL (the portrait on the left reacts to what happens on the field)

@@ -4,7 +4,6 @@ const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
-const ease = @import("../ease.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -101,8 +100,7 @@ fn advance(scn: *Scene, game_id: EntityID) !void {
 fn descend(scn: *Scene, game_id: EntityID, dt: f32) void {
     const descent = scn.entities.getComponent(game_id, comps.Descent).?;
     descent.time += dt;
-    const t = @min(descent.time / constants.BLOCK_DESCENT_TIME, 1.0);
-    const lag = constants.CELL_SIZE * (1 - ease.inOutCubic(t));
+    const lag = descent.lag();
 
     var it = scn.entities.query(.{ comps.Block, comps.GridCell, comps.Position });
     while (it.next()) |id| {
@@ -111,7 +109,7 @@ fn descend(scn: *Scene, game_id: EntityID, dt: f32) void {
         scn.entities.getComponent(id, comps.Position).?.* = .{ .x = rect.x, .y = rect.y - lag };
     }
 
-    if (t < 1.0) return;
+    if (descent.time < constants.BLOCK_DESCENT_TIME) return;
     scn.entities.getComponent(game_id, comps.Turn).?.phase = descent.next;
     descent.* = .{};
 }

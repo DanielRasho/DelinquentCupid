@@ -18,6 +18,8 @@ pub const Sprite = enum {
     cupid_chill,
     cupid_motivated,
     cupid_fired_up,
+    map_grass,
+    map_soil,
 };
 
 var textures = std.EnumArray(Sprite, ?rl.Texture2D).initFill(null);
@@ -37,6 +39,21 @@ pub fn unload() void {
         if (slot.*) |texture| rl.unloadTexture(texture);
         slot.* = null;
     }
+}
+
+/// Draws tile (`col`, `row`) of `sheet` -- a sheet cut into squares of
+/// `TILE_ART_SIZE` -- at `PIXEL_SCALE`, with its top-left corner at (`x`, `y`).
+pub fn drawTile(sheet: Sprite, col: u8, row: u8, x: f32, y: f32) void {
+    const texture = textures.get(sheet) orelse return;
+    const art = constants.TILE_ART_SIZE;
+    rl.drawTexturePro(
+        texture,
+        .{ .x = @as(f32, @floatFromInt(col)) * art, .y = @as(f32, @floatFromInt(row)) * art, .width = art, .height = art },
+        .{ .x = @round(x), .y = @round(y), .width = constants.TILE_SIZE, .height = constants.TILE_SIZE },
+        .{ .x = 0, .y = 0 },
+        0,
+        .white,
+    );
 }
 
 /// Draws `sprite` at `PIXEL_SCALE`, centred in `rect`. It's never stretched

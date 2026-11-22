@@ -21,6 +21,7 @@ const girl_system = @import("game/systems/girl.zig").girl_system;
 const cupid_system = @import("game/systems/cupid.zig").cupid_system;
 const ball_system = @import("game/systems/ball.zig").ball_system;
 const block_system = @import("game/systems/block.zig").block_system;
+const map_system = @import("game/systems/map.zig").map_system;
 const effects_system = @import("game/systems/effects.zig").effects_system;
 const tarot_system = @import("game/systems/tarot.zig").tarot_system;
 const render_system = @import("game/systems/render.zig").render_system;
@@ -45,7 +46,9 @@ fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     // and what's on it) sits before the systems that draw on top of it.
     // `Tarot` goes after everything that reacts to a click while aiming, so
     // the click that dismisses a card can't also fire or buy that frame; it
-    // is also last to draw, over the field.
+    // is also last to draw, over the field. `Map` scrolls the background on
+    // the frame `Block` starts a descent, so it goes after `Block` (it draws
+    // nothing itself: `Render` draws the map, under the field).
     try scn.register("Game", game_system);
     try scn.register("Player", player_system);
     try scn.register("Render", render_system);
@@ -56,6 +59,7 @@ fn gameplayScene(allocator: std.mem.Allocator) !ecs.scene.Scene {
     try scn.register("Ball", ball_system);
     try scn.register("Effects", effects_system);
     try scn.register("Block", block_system);
+    try scn.register("Map", map_system);
     try scn.register("Hud", hud_system);
     try scn.register("Tarot", tarot_system);
     return scn;
@@ -138,4 +142,5 @@ pub fn main() !void {
 test {
     _ = @import("game/spheres.zig");
     _ = @import("game/ease.zig");
+    _ = @import("game/terrain.zig");
 }

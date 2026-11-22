@@ -5,6 +5,8 @@ const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
 const spheres = @import("../spheres.zig");
+const sprites = @import("../sprites.zig");
+const terrain = @import("../terrain.zig");
 const ui = @import("../ui.zig");
 
 const Sys = ecs.system.System;
@@ -18,26 +20,38 @@ const HEALTH_FONT_SIZE: i32 = 24;
 // RENDER: the greybox world (field, blocks, balls, player).
 // ===================
 
-/// Stand-in for the tilemap: a checkerboard of the stage's square tiles,
-/// clipped to the stage (tiles cut by its edges show partially).
-fn drawStage() void {
-    const stage = field.stage;
-    const tile = constants.TILE_SIZE;
-    const first_col: i32 = @intFromFloat(@floor((stage.x - constants.FIELD_LEFT) / tile));
-    const last_col: i32 = @intFromFloat(@ceil((stage.x + stage.width - constants.FIELD_LEFT) / tile));
-    const first_row: i32 = @intFromFloat(@floor((stage.y - constants.FIELD_TOP) / tile));
-    const last_row: i32 = @intFromFloat(@ceil((stage.y + stage.height - constants.FIELD_TOP) / tile));
+/// The background map (`terrain.zig`), clipped to the stage: soil under
+/// every cell first, so nothing is ever left empty, then the grass patches
+/// over it, autotiled. While the blocks descend it slides down with them.
+fn drawStage(scn: *Scene) void {
+    var map_it = scn.entities.query(.{comps.Terrain});
+    const map = scn.entities.getComponent(map_it.next() orelse return, comps.Terrain).?;
+    var game_it = scn.entities.query(.{comps.Descent});
+    const descent = scn.entities.getComponent(game_it.next() orelse return, comps.Descent).?;
+    // Until `map.zig` has scrolled it for this descent, it has nothing to slide.
+    const lag = if (map.scrolled) descent.lag() else 0;
 
+    const stage = field.stage;
     rl.beginScissorMode(@intFromFloat(stage.x), @intFromFloat(stage.y), @intFromFloat(stage.width), @intFromFloat(stage.height));
     defer rl.endScissorMode();
 
-    var row = first_row;
-    while (row < last_row) : (row += 1) {
-        var col = first_col;
-        while (col < last_col) : (col += 1) {
-            const is_dark = @mod(col + row, 2) == 0;
-            const shade: u8 = if (is_dark) 58 else 66;
-            rl.drawRectangleRec(field.tileRect(col, row), rl.Color.init(shade, shade + 6, shade + 14, 255));
+    // The map's rows above the stage's top one start out of view.
+    const tile = constants.TILE_SIZE;
+    const top = stage.y - @as(f32, terrain.ROWS_ABOVE) * tile - lag;
+
+    for (map.cells, 0..) |row, r| {
+        const y = top + @as(f32, @floatFromInt(r)) * tile;
+        for (row, 0..) |cell, c| {
+            const soil = terrain.soilTile(cell.soil);
+            sprites.drawTile(.map_soil, soil.col, soil.row, stage.x + @as(f32, @floatFromInt(c)) * tile, y);
+        }
+    }
+    for (map.cells, 0..) |row, r| {
+        const y = top + @as(f32, @floatFromInt(r)) * tile;
+        for (row, 0..) |cell, c| {
+            if (!cell.grass) continue;
+            const grass = terrain.grassTile(terrain.grassMask(&map.cells, r, c));
+            sprites.drawTile(.map_grass, grass.col, grass.row, stage.x + @as(f32, @floatFromInt(c)) * tile, y);
         }
     }
 }
@@ -72,7 +86,7 @@ fn drawBlocks(scn: *Scene) void {
 }
 
 fn gameRender(_: *Sys, scn: *Scene) void {
-    drawStage();
+    drawStage(scn);
 
     // Field, plus the line a block must not cross.
     rl.drawRectangleRec(field.rect, rl.fade(.black, 0.45));
