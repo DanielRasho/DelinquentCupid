@@ -22,3 +22,18 @@ pub const cupid_fired_up = @embedFile("cupid/firedUp.png");
 // `src/game/terrain.zig`), soil is 16 interchangeable fill tiles.
 pub const map_grass = @embedFile("map/grass.png");
 pub const map_soil = @embedFile("map/soil.png");
+
+// The player, a 4-frame loop of 32 x 32 (see `PLAYER_ANIM_FPS`).
+pub const player_1 = @embedFile("player/1.png");
+pub const player_2 = @embedFile("player/2.png");
+pub const player_3 = @embedFile("player/3.png");
+pub const player_4 = @embedFile("player/4.png");
+
+// Blocks: four interchangeable faces for regular blocks (32 x 32), the gold
+// block (32 x 32) and the 2 x 2 mini boss (64 x 64).
+pub const block_face_1 = @embedFile("blocks/Layer 1.png");
+pub const block_face_2 = @embedFile("blocks/Enemies 2.png");
+pub const block_face_3 = @embedFile("blocks/Enemies 3.png");
+pub const block_face_4 = @embedFile("blocks/Enemies4.png");
+pub const block_gold = @embedFile("blocks/golden.png");
+pub const block_boss = @embedFile("blocks/Boss.png");

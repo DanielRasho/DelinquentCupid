@@ -4,6 +4,7 @@ const ecs = @import("ecs");
 const constants = @import("../constants.zig");
 const comps = @import("../components.zig");
 const field = @import("../field.zig");
+const sprites = @import("../sprites.zig");
 
 const Sys = ecs.system.System;
 const Scene = ecs.scene.Scene;
@@ -208,10 +209,20 @@ fn bossColumn(scn: *Scene) ?u8 {
     return options[@intCast(rl.getRandomValue(0, @intCast(total - 1)))];
 }
 
+/// Regular blocks wear one of these, at random.
+const FACES = [_]sprites.Sprite{ .block_face_1, .block_face_2, .block_face_3, .block_face_4 };
+
 fn spawnBlock(scn: *Scene, cell: comps.GridCell, health: u32, reward: u32, gold: bool) !void {
     const rect = field.blockRect(cell.col, cell.row, cell.cols, cell.rows);
+    // Only mini bosses span several cells.
+    const art: sprites.Sprite = if (gold)
+        .block_gold
+    else if (cell.cols > 1 or cell.rows > 1)
+        .block_boss
+    else
+        FACES[@intCast(rl.getRandomValue(0, FACES.len - 1))];
     const id = try scn.entities.new();
-    try scn.entities.setComponent(id, comps.Block{});
+    try scn.entities.setComponent(id, comps.Block{ .art = art });
     try scn.entities.setComponent(id, cell);
     try scn.entities.setComponent(id, comps.Position{ .x = rect.x, .y = rect.y });
     try scn.entities.setComponent(id, comps.Size{ .width = rect.width, .height = rect.height });
